@@ -20,16 +20,15 @@
 #include "packet.h"
 
 //forward declarations
-void askInput(char buf[MAXBUFLEN], char command[MAX_NAME], char arg1[MAX_NAME], char arg2[MAX_NAME],
-			  char arg3[MAX_NAME], char arg4[MAX_NAME], char extra[MAX_NAME]);
-void login(char arg1[MAX_NAME], char arg2[MAX_NAME], char arg3[MAX_NAME], char arg4[MAX_NAME], int *sockfd, pthread_t *clientThread);
+void askInput(char *buf, char *command, char *arg1, char *arg2, char *arg3, char *arg4, char *extra);
+void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_t *clientThread);
 void logout(int *sockfd, pthread_t *clientThread);
-void joinsession(char arg1[MAX_NAME], int *sockfd);
+void joinsession(char *arg1, int *sockfd);
 void leavesession(int *sockfd);
-void createsession(char arg1[MAX_NAME], int *sockfd);
+void createsession(char *arg1, int *sockfd);
 void list(int *sockfd);
 void quit(int *sockfd, pthread_t *clientThread);
-void messageTransfer(char message[MAX_NAME], int *sockfd);
+void messageTransfer(char *message, int *sockfd);
 
 int main(int argc, char *argv[])
 {
@@ -68,7 +67,6 @@ int main(int argc, char *argv[])
 
 		//check command
 		if (strcmp(command, "/login")==0){
-			//check input length
 			if (arg1[0] == '\0' || arg2[0] == '\0' || arg3[0] == '\0' || arg4[0] == '\0') {
 				perror("too few arguments or too long\n");
 				goto ask_input;
@@ -130,28 +128,35 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-void login(char arg1[MAX_NAME], char arg2[MAX_NAME], char arg3[MAX_NAME], char arg4[MAX_NAME], int *sockfd, pthread_t *clientThread){
+void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_t *clientThread){
 
 }
+
 void logout(int *sockfd, pthread_t *clientThread){
-
-}
-void joinsession(char arg1[MAX_NAME], int *sockfd){
-
-}
-void leavesession(int *sockfd){
 	
 }
-void createsession(char arg1[MAX_NAME], int *sockfd){
+
+void joinsession(char *arg1, int *sockfd){
 
 }
+
+void leavesession(int *sockfd){
+
+}
+
+void createsession(char *arg1, int *sockfd){
+
+}
+
 void list(int *sockfd){
 
 }
+
 void quit(int *sockfd, pthread_t *clientThread){
 
 }
-void messageTransfer(char message[MAX_NAME], int *sockfd){
+
+void messageTransfer(char *message, int *sockfd){
 
 }
 
@@ -188,8 +193,7 @@ void messageTransfer(char message[MAX_NAME], int *sockfd){
 	freeaddrinfo(servinfo);
 */
 
-void askInput(char buf[MAXBUFLEN], char command[MAX_NAME], char arg1[MAX_NAME], char arg2[MAX_NAME],
-			  char arg3[MAX_NAME], char arg4[MAX_NAME], char extra[MAX_NAME]){
+void askInput(char *buf, char *command, char *arg1, char *arg2, char *arg3, char *arg4, char *extra){
 
 	printf("User: insert command\n");
 	memset(buf, 0, MAXBUFLEN); // first empty the buffer
