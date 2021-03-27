@@ -21,6 +21,7 @@
 
 //forward declarations
 void askInput(char *buf, char *command, char *arg1, char *arg2, char *arg3, char *arg4, char *extra);
+void *client_receiver(void *socketfd);
 void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_t *clientThread);
 void logout(int *sockfd, pthread_t *clientThread);
 void joinsession(char *arg1, int *sockfd);
@@ -29,6 +30,9 @@ void createsession(char *arg1, int *sockfd);
 void list(int *sockfd);
 void quit(int *sockfd, pthread_t *clientThread);
 void messageTransfer(char *message, int *sockfd);
+
+//global variables
+char *sessionID = NULL;
 
 int main(int argc, char *argv[])
 {
@@ -163,6 +167,7 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 
 	if (p == NULL) {
 		fprintf(stderr, "talker: failed to create socket\n");
+		close(*sockfd);
 		*sockfd = 0;
 		return;
 	}
@@ -173,7 +178,7 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 
 	freeaddrinfo(servinfo);
 
-	//send packet
+	//create packet
 	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
 	//populate packet
 	newPacket->type = LOGIN;
@@ -181,6 +186,46 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 	strcpy(newPacket->source, arg1);
 	strcpy(newPacket->data, arg2);
 
+	//format packet
+	char buffer[MAXBUFLEN];
+	DataToPacket(buffer, newPacket);
+
+	//send packet
+	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+		perror("talker: send");
+		close(*sockfd);
+		*sockfd = 0;
+		return;
+	}
+
+	//receive a message from the server
+	memset(buffer, 0, MAXBUFLEN); // first empty the buffer
+	if ((numbytes = recv(*sockfd, buffer, MAXBUFLEN-1 , 0)) == -1) {
+		perror("recv");
+		close(*sockfd);
+		*sockfd = 0;
+		return;
+	}
+
+	//format message
+	PacketToData(buffer, newPacket);
+
+	//check info
+	if (newPacket->type == LO_ACK){
+		//create a thread for active user logging in a session to receive messages from server
+		pthread_create(clientThread, NULL, client_receiver, sockfd);
+		fprintf(stdout, "talker: %s successfully logged in to %s on port %s\n", arg1, arg3, arg4);
+	}else if (newPacket->type == LO_NAK){
+		fprintf(stderr, "talker: %s failed logged in to %s on port %s due to %s\n", arg1, arg3, arg4, newPacket->data);
+		close(*sockfd);
+		*sockfd = 0;
+		return;
+	}else{
+		fprintf(stderr, "talker: %s failed to log in, unexpected response from server\n", arg1);
+		close(*sockfd);
+		*sockfd = 0;
+		return;
+	}
 
 	//free packet space allocated by malloc
     free(newPacket);
@@ -325,4 +370,50 @@ void askInput(char *buf, char *command, char *arg1, char *arg2, char *arg3, char
 		}
 		count++;
 	}
+}
+
+void *client_receiver(void *socketfd){
+	char buffer[MAXBUFLEN];
+	int numbytes;
+	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	int *sockfd = socketfd;
+
+	while(1){
+		//receive a message from the server
+		memset(buffer, 0, MAXBUFLEN); // first empty the buffer
+		if ((numbytes = recv(*sockfd, buffer, MAXBUFLEN-1 , 0)) == -1) {
+			perror("recv");
+			return NULL;
+		}
+
+		//format
+		PacketToData(buffer, newPacket);
+
+		//check info
+		switch (newPacket->type)
+		{
+		case JN_ACK:
+			sessionID = newPacket->data;
+			fprintf(stdout, "talker: server acknowledge join of session %s\n", newPacket->data);
+			break;
+		case JN_NAK:
+			sessionID = NULL;
+			fprintf(stderr, "talker: can't join session %s\n", newPacket->data);
+			break;
+		case NS_ACK:
+			sessionID = newPacket->data;
+			fprintf(stdout, "talker: server acknowledge new session %s\n", newPacket->data);
+			break;
+		case QU_ACK:
+			fprintf(stdout, "talker: List of users and sessions:\n %s\n", newPacket->data);
+			break;
+		case MESSAGE:
+			fprintf(stdout, "%s: %s\n", newPacket->source, newPacket->data);
+			break;
+		default: //cannot receive LO_ACK or LO_NAK as this takes places before reaching this point
+			fprintf(stderr, "talker: erronous response from server, packet is of type %d and data is %s\n", newPacket->type, newPacket->data);
+			break;
+		}
+	}
+	return NULL;
 }
