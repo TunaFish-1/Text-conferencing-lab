@@ -1,3 +1,12 @@
+<<<<<<< HEAD
+=======
+/*
+	server.c 
+	Made by Anthony Fakhoury and Romil Jain
+	Inspired by snipets of code from Beej's Guide to Network Programming
+*/
+
+>>>>>>> a492d5037ceca5db6a4b7c7ebe3b16a8f0223736
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -8,6 +17,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+<<<<<<< HEAD
 
 #include "packet.h"
 
@@ -27,6 +37,13 @@ void *get_in_addr(struct sockaddr *sa)
 }
 
 
+=======
+#include <time.h>
+#include <pthread.h>
+
+#include "packet.h"
+
+>>>>>>> a492d5037ceca5db6a4b7c7ebe3b16a8f0223736
 int main(int argc, char const *argv[])
 {
 	int sockfd;
@@ -39,6 +56,7 @@ int main(int argc, char const *argv[])
 	char s[INET_ADDRSTRLEN];
 
     if (argc != 2) {
+<<<<<<< HEAD
 		fprintf(stderr,"usage: server <TCP port number to listen on>\n");
 		exit(1);
 	}
@@ -48,6 +66,17 @@ int main(int argc, char const *argv[])
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_INET; // set to AF_INET6 to use IPv6
 	hints.ai_socktype = SOCK_STREAM;
+=======
+		fprintf(stderr,"usage: server <UDP listen port>\n");
+		exit(1);
+	}
+
+    //int MYPORT = atoi(argv[1]);
+
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_INET; // set to AF_INET6 to use IPv6
+	hints.ai_socktype = SOCK_DGRAM;
+>>>>>>> a492d5037ceca5db6a4b7c7ebe3b16a8f0223736
 	hints.ai_flags = AI_PASSIVE; // use my IP
 
 	if ((rv = getaddrinfo(NULL, argv[1], &hints, &servinfo)) != 0) {
@@ -81,6 +110,7 @@ int main(int argc, char const *argv[])
 
 	printf("listener: waiting to recvfrom...\n");
 
+<<<<<<< HEAD
     if(listen(sockfd, SERVER_CAPACITY) == -1){// 8 clients limit for listening
         perror("Too many connections");
         exit(1);
@@ -110,6 +140,8 @@ int main(int argc, char const *argv[])
 
 
 
+=======
+>>>>>>> a492d5037ceca5db6a4b7c7ebe3b16a8f0223736
 	//receive a message from the client
 	memset(buf, 0, MAXBUFLEN); // first empty the buffer
 	addr_len = sizeof their_addr;
@@ -140,4 +172,8 @@ int main(int argc, char const *argv[])
             exit(1);
         }
     }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> a492d5037ceca5db6a4b7c7ebe3b16a8f0223736
