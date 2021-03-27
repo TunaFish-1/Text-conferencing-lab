@@ -32,12 +32,8 @@ void messageTransfer(char *message, int *sockfd);
 
 int main(int argc, char *argv[])
 {
-	int sockfd;
-	struct addrinfo hints, *servinfo, *p;
-	int rv;
-	int numbytes;
+	int sockfd = 0;
 	char buf[MAXBUFLEN];
-	char s[INET_ADDRSTRLEN];
 	char command[MAX_NAME];
 	char arg1[MAX_NAME];
 	char arg2[MAX_NAME];
@@ -129,11 +125,69 @@ int main(int argc, char *argv[])
 }
 
 void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_t *clientThread){
+	//initiaite connection
+	if (*sockfd){
+		fprintf(stdout, "Client already connected\n");
+		return;
+	}
 
+	struct addrinfo hints, *servinfo, *p;
+	int rv;
+	int numbytes;
+	char s[INET_ADDRSTRLEN]; 
+
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_INET; // set to AF_INET6 to use IPv6
+	hints.ai_socktype = SOCK_DGRAM;
+
+	if ((rv = getaddrinfo(arg3, arg4, &hints, &servinfo)) != 0) {
+		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+		return;
+	}
+
+	// loop through all the results and make a socket
+	for(p = servinfo; p != NULL; p = p->ai_next) {
+		if ((*sockfd = socket(p->ai_family, p->ai_socktype,
+				p->ai_protocol)) == -1) {
+			perror("talker: socket\n");
+			continue;
+		}
+		if (connect(*sockfd, p->ai_addr, p->ai_addrlen) == -1) { 
+			close(*sockfd);
+			perror("talker: connect\n");
+			continue;
+		}
+
+		break;
+	}
+
+	if (p == NULL) {
+		fprintf(stderr, "talker: failed to create socket\n");
+		*sockfd = 0;
+		return;
+	}
+
+	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
+				s, sizeof s);
+	printf("talker: connecting to %s\n", s);
+
+	freeaddrinfo(servinfo);
+
+	//send packet
+	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	//populate packet
+	newPacket->type = LOGIN;
+	newPacket->size = sizeof(*arg2);
+	strcpy(newPacket->source, arg1);
+	strcpy(newPacket->data, arg2);
+
+
+	//free packet space allocated by malloc
+    free(newPacket);
 }
 
 void logout(int *sockfd, pthread_t *clientThread){
-	
+
 }
 
 void joinsession(char *arg1, int *sockfd){
@@ -159,39 +213,6 @@ void quit(int *sockfd, pthread_t *clientThread){
 void messageTransfer(char *message, int *sockfd){
 
 }
-
-/*  
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_INET; // set to AF_INET6 to use IPv6
-	hints.ai_socktype = SOCK_DGRAM;
-
-	if ((rv = getaddrinfo(argv[1], argv[2], &hints, &servinfo)) != 0) {
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-		return 1;
-	}
-
-	// loop through all the results and make a socket
-	for(p = servinfo; p != NULL; p = p->ai_next) {
-		if ((sockfd = socket(p->ai_family, p->ai_socktype,
-				p->ai_protocol)) == -1) {
-			perror("talker: socket");
-			continue;
-		}
-
-		break;
-	}
-
-	if (p == NULL) {
-		fprintf(stderr, "talker: failed to create socket\n");
-		return 2;
-	}
-
-	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
-				s, sizeof s);
-	printf("talker: connecting to %s\n", s);
-
-	freeaddrinfo(servinfo);
-*/
 
 void askInput(char *buf, char *command, char *arg1, char *arg2, char *arg3, char *arg4, char *extra){
 
