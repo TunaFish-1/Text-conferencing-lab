@@ -24,8 +24,12 @@ void askInput(char buf[MAXBUFLEN], char command[MAX_NAME], char arg1[MAX_NAME], 
 			  char arg3[MAX_NAME], char arg4[MAX_NAME], char extra[MAX_NAME]);
 void login(char arg1[MAX_NAME], char arg2[MAX_NAME], char arg3[MAX_NAME], char arg4[MAX_NAME], int *sockfd, pthread_t *clientThread);
 void logout(int *sockfd, pthread_t *clientThread);
-void joinsession(char arg1[MAX_NAME], &sockfd);
-
+void joinsession(char arg1[MAX_NAME], int *sockfd);
+void leavesession(int *sockfd);
+void createsession(char arg1[MAX_NAME], int *sockfd);
+void list(int *sockfd);
+void quit(int *sockfd, pthread_t *clientThread);
+void messageTransfer(char message[MAX_NAME], int *sockfd);
 
 int main(int argc, char *argv[])
 {
@@ -63,9 +67,7 @@ int main(int argc, char *argv[])
 		}
 
 		//check command
-		switch (command)
-		{
-		case "/login":
+		if (strcmp(command, "/login")==0){
 			//check input length
 			if (arg1[0] == '\0' || arg2[0] == '\0' || arg3[0] == '\0' || arg4[0] == '\0') {
 				perror("too few arguments or too long\n");
@@ -75,15 +77,13 @@ int main(int argc, char *argv[])
 				goto ask_input;
 			}
 			login(arg1, arg2, arg3, arg4, &sockfd, &clientThread);
-			break;
-		case "/logout":
+		}else if (strcmp(command, "/logout")==0){ 
 			if (arg1[0] != '\0') {
 				perror("too many arguments\n");
 				goto ask_input;
 			}
 			logout(&sockfd, &clientThread);
-			break;
-		case "/joinsession":
+		}else if (strcmp(command, "/joinsession")==0){ 
 			if (arg1[0] == '\0') {
 				perror("too few arguments or too long\n");
 				goto ask_input;
@@ -92,29 +92,25 @@ int main(int argc, char *argv[])
 				goto ask_input;
 			}
 			joinsession(arg1, &sockfd);
-			break;
-		case "/leavesession":
+		}else if (strcmp(command, "/leavesession")==0){
 			if (arg1[0] != '\0') {
 				perror("too many arguments\n");
 				goto ask_input;
 			}
 			leavesession(&sockfd);
-			break;
-		case "/createsession":
+		}else if (strcmp(command, "/createsession")==0){
 			if (arg1[0] != '\0') {
 				perror("too many arguments\n");
 				goto ask_input;
 			}
 			createsession(arg1, &sockfd);
-			break;
-		case "/list":
+		}else if (strcmp(command, "/list")==0){
 			if (arg1[0] != '\0') {
 				perror("too many arguments\n");
 				goto ask_input;
 			}
 			list(&sockfd);
-			break;
-		case "/quit":
+		}else if (strcmp(command, "/quit")==0){
 			if (arg1[0] != '\0') {
 				perror("too many arguments\n");
 				goto ask_input;
@@ -122,17 +118,41 @@ int main(int argc, char *argv[])
 			quit(&sockfd, &clientThread);
 			fprintf(stdout, "EXIT\n");
 			return 0;
-			break;
-		default: //command is the message to be sent
+		}else{ //command is the message to be sent
 			if (arg1[0] != '\0') {
 				perror("too many arguments\n");
 				goto ask_input;
 			}
-			break;
+			messageTransfer(command, &sockfd);
 		}
 	}
 	fprintf(stdout, "EXIT\n");
 	return 0;
+}
+
+void login(char arg1[MAX_NAME], char arg2[MAX_NAME], char arg3[MAX_NAME], char arg4[MAX_NAME], int *sockfd, pthread_t *clientThread){
+
+}
+void logout(int *sockfd, pthread_t *clientThread){
+
+}
+void joinsession(char arg1[MAX_NAME], int *sockfd){
+
+}
+void leavesession(int *sockfd){
+	
+}
+void createsession(char arg1[MAX_NAME], int *sockfd){
+
+}
+void list(int *sockfd){
+
+}
+void quit(int *sockfd, pthread_t *clientThread){
+
+}
+void messageTransfer(char message[MAX_NAME], int *sockfd){
+
 }
 
 /*  
