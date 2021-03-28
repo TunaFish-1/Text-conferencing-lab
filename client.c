@@ -118,11 +118,7 @@ int main(int argc, char *argv[])
 			fprintf(stdout, "EXIT\n");
 			return 0;
 		}else{ //command is the message to be sent
-			if (arg1[0] != '\0') {
-				perror("too many arguments\n");
-				goto ask_input;
-			}
-			messageTransfer(command, &sockfd);
+			messageTransfer(buf, &sockfd);
 		}
 	}
 	fprintf(stdout, "EXIT\n");
@@ -386,12 +382,6 @@ void askInput(char *buf, char *command, char *arg1, char *arg2, char *arg3, char
 		count++;
 	}
 	int index = 0;
-	while (buf[count]==' ') {
-		if (count >= MAXBUFLEN) {
-			break;
-		}
-		count++;
-	}
 	while (buf[count]!=' ') {
 		if (buf[count]=='\0' || buf[count]=='\n' || count >= MAXBUFLEN) {
 			break;
@@ -402,6 +392,12 @@ void askInput(char *buf, char *command, char *arg1, char *arg2, char *arg3, char
 	}
 	command[index] = '\0';
 	index = 0;
+	while (buf[count]==' ') {
+		if (count >= MAXBUFLEN) {
+			break;
+		}
+		count++;
+	}
 	while (buf[count]!=' ') {
 		if (buf[count]=='\0' || buf[count]=='\n' || count >= MAXBUFLEN) {
 			break;
