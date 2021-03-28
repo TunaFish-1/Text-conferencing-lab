@@ -33,6 +33,7 @@ void messageTransfer(char *message, int *sockfd);
 
 //global variables
 char *sessionID = NULL;
+char *clientID = NULL;
 
 int main(int argc, char *argv[])
 {
@@ -180,6 +181,7 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 
 	//create packet
 	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	clientID = arg1;
 	//populate packet
 	newPacket->type = LOGIN;
 	newPacket->size = sizeof(*arg2);
@@ -253,6 +255,8 @@ int logout(int *sockfd, pthread_t *clientThread){
 	//populate packet
 	newPacket->type = EXIT;
 	newPacket->size = 0;
+	strcpy(newPacket->source, clientID);
+	strcpy(newPacket->data, NULL);
 
 	//format packet
 	char buffer[MAXBUFLEN];
@@ -296,7 +300,7 @@ void createsession(char *arg1, int *sockfd){
 void list(int *sockfd){
 	if (*sockfd == 0){
 		fprintf(stdout, "Client not logged in\n");
-		return -1;
+		return;
 	}
 
 	//create packet
@@ -304,6 +308,8 @@ void list(int *sockfd){
 	//populate packet
 	newPacket->type = QUERY;
 	newPacket->size = 0;
+	strcpy(newPacket->source, clientID);
+	strcpy(newPacket->data, NULL);
 
 	//format packet
 	char buffer[MAXBUFLEN];
@@ -331,6 +337,36 @@ void quit(int *sockfd, pthread_t *clientThread){
 }
 
 void messageTransfer(char *message, int *sockfd){
+	if (*sockfd == 0){
+		fprintf(stdout, "Client not logged in\n");
+		return;
+	}else if (sessionID == NULL){
+		fprintf(stdout, "Client not in a session\n");
+		return;
+	}
+
+	//create packet
+	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	//populate packet
+	newPacket->type = MESSAGE;
+	newPacket->size = sizeof(*message);
+	strcpy(newPacket->source, clientID);
+	strcpy(newPacket->data, message);
+
+	//format packet
+	char buffer[MAXBUFLEN];
+	int numbytes;
+	DataToPacket(buffer, newPacket);
+
+	//send packet
+	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+		perror("talker: send");
+		free(newPacket);
+		return;
+	}
+
+	free(newPacket);
+	return;
 
 }
 
