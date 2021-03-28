@@ -282,15 +282,105 @@ int logout(int *sockfd, pthread_t *clientThread){
 }
 
 void joinsession(char *arg1, int *sockfd){
+	if (*sockfd == 0){
+		fprintf(stdout, "Client not logged in\n");
+		return;
+	}
+	if (sessionID != NULL){
+		fprintf(stdout, "Client already in a session\n");
+		return;
+	}
 
+	//create packet
+	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	//populate packet
+	newPacket->type = JOIN;
+	newPacket->size = sizeof(*arg1);
+	strcpy(newPacket->source, clientID);
+	strcpy(newPacket->data, arg1);
+
+	//format packet
+	char buffer[MAXBUFLEN];
+	int numbytes;
+	DataToPacket(buffer, newPacket);
+
+	//send packet
+	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+		perror("talker: send");
+		free(newPacket);
+		return;
+	}
+
+	free(newPacket);
+	return;
 }
 
 void leavesession(int *sockfd){
+	if (*sockfd == 0){
+		fprintf(stdout, "Client not logged in\n");
+		return;
+	}
+	if (sessionID == NULL){
+		fprintf(stdout, "Client is not in a session\n");
+		return;
+	}
 
+	//create packet
+	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	//populate packet
+	newPacket->type = LEAVE_SESS;
+	newPacket->size = 0;
+	strcpy(newPacket->source, clientID);
+	strcpy(newPacket->data, NULL);
+
+	//format packet
+	char buffer[MAXBUFLEN];
+	int numbytes;
+	DataToPacket(buffer, newPacket);
+
+	//send packet
+	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+		perror("talker: send");
+		free(newPacket);
+		return;
+	}
+
+	free(newPacket);
+	return;
 }
 
 void createsession(char *arg1, int *sockfd){
+	if (*sockfd == 0){
+		fprintf(stdout, "Client not logged in\n");
+		return;
+	}
+	if (sessionID != NULL){
+		fprintf(stdout, "Client already in a session\n");
+		return;
+	}
 
+	//create packet
+	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	//populate packet
+	newPacket->type = NEW_SESS;
+	newPacket->size = sizeof(*arg1);;
+	strcpy(newPacket->source, clientID);
+	strcpy(newPacket->data, arg1);
+
+	//format packet
+	char buffer[MAXBUFLEN];
+	int numbytes;
+	DataToPacket(buffer, newPacket);
+
+	//send packet
+	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+		perror("talker: send");
+		free(newPacket);
+		return;
+	}
+
+	free(newPacket);
+	return;
 }
 
 void list(int *sockfd){
