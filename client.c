@@ -23,7 +23,7 @@
 void askInput(char *buf, char *command, char *arg1, char *arg2, char *arg3, char *arg4, char *extra);
 void *client_receiver(void *socketfd);
 void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_t *clientThread);
-void logout(int *sockfd, pthread_t *clientThread);
+int logout(int *sockfd, pthread_t *clientThread);
 void joinsession(char *arg1, int *sockfd);
 void leavesession(int *sockfd);
 void createsession(char *arg1, int *sockfd);
@@ -195,6 +195,7 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 		perror("talker: send");
 		close(*sockfd);
 		*sockfd = 0;
+		free(newPacket);
 		return;
 	}
 
@@ -204,6 +205,7 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 		perror("recv");
 		close(*sockfd);
 		*sockfd = 0;
+		free(newPacket);
 		return;
 	}
 
@@ -218,6 +220,7 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 			fprintf(stderr, "talker: %s failed to log in, thread_create error\n", arg1);
 			close(*sockfd);
 			*sockfd = 0;
+			free(newPacket);
 			return;
 		}
 		fprintf(stdout, "talker: %s successfully logged in to %s on port %s\n", arg1, arg3, arg4);
@@ -225,11 +228,13 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 		fprintf(stderr, "talker: %s failed logged in to %s on port %s due to %s\n", arg1, arg3, arg4, newPacket->data);
 		close(*sockfd);
 		*sockfd = 0;
+		free(newPacket);
 		return;
 	}else{
 		fprintf(stderr, "talker: %s failed to log in, unexpected response from server\n", arg1);
 		close(*sockfd);
 		*sockfd = 0;
+		free(newPacket);
 		return;
 	}
 
@@ -237,10 +242,10 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
     free(newPacket);
 }
 
-void logout(int *sockfd, pthread_t *clientThread){
+int logout(int *sockfd, pthread_t *clientThread){
 	if (*sockfd == 0){
 		fprintf(stdout, "Client not logged in\n");
-		return;
+		return -1;
 	}
 
 	//create packet
@@ -257,20 +262,23 @@ void logout(int *sockfd, pthread_t *clientThread){
 	//send packet
 	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
 		perror("talker: send");
-		return;
+		free(newPacket);
+		return -1;
 	}
 
 	numbytes = pthread_cancel(*clientThread);
 	if(numbytes){
 		fprintf(stderr, "talker: failed to delete thread during log out\n");
-		return;
+		free(newPacket);
+		return -1;
 	}
 
 	fprintf(stdout, "talker: client successfully logged out\n");
 	close(*sockfd);
 	*sockfd = 0;
 	sessionID = NULL;
-	return;
+	free(newPacket);
+	return 1;
 }
 
 void joinsession(char *arg1, int *sockfd){
@@ -290,7 +298,12 @@ void list(int *sockfd){
 }
 
 void quit(int *sockfd, pthread_t *clientThread){
-
+	if (logout(sockfd, clientThread) == 1){
+		fprintf(stdout, "talker: terminating program\n");
+		exit(1);
+	}else{
+		return;
+	}
 }
 
 void messageTransfer(char *message, int *sockfd){
