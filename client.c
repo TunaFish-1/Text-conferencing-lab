@@ -294,7 +294,31 @@ void createsession(char *arg1, int *sockfd){
 }
 
 void list(int *sockfd){
+	if (*sockfd == 0){
+		fprintf(stdout, "Client not logged in\n");
+		return -1;
+	}
 
+	//create packet
+	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	//populate packet
+	newPacket->type = QUERY;
+	newPacket->size = 0;
+
+	//format packet
+	char buffer[MAXBUFLEN];
+	int numbytes;
+	DataToPacket(buffer, newPacket);
+
+	//send packet
+	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+		perror("talker: send");
+		free(newPacket);
+		return;
+	}
+
+	free(newPacket);
+	return;
 }
 
 void quit(int *sockfd, pthread_t *clientThread){
