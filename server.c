@@ -1,12 +1,3 @@
-<<<<<<< HEAD
-=======
-/*
-	server.c 
-	Made by Anthony Fakhoury and Romil Jain
-	Inspired by snipets of code from Beej's Guide to Network Programming
-*/
-
->>>>>>> a492d5037ceca5db6a4b7c7ebe3b16a8f0223736
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -17,33 +8,139 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
-<<<<<<< HEAD
-
+#include <time.h>
+#include <pthread.h>
+#include <stdbool.h>
 #include "packet.h"
 
 int totalClients = 0;
 
-#define MAXBUFLEN 100
+struct Clients{
+    int clientSocket;
+    struct sockaddr_in clientAddr;
+    int session_id;
+    char* clientUsername;
+    int clientID;
+};
+
+
+
 #define SERVER_CAPACITY 10
+#define INACTIVE_CLIENT -1
+#define MAXCHAR 1000
 
-// get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
-{
-	if (sa->sa_family == AF_INET) {
-		return &(((struct sockaddr_in*)sa)->sin_addr);
-	}
+struct Clients clientList[SERVER_CAPACITY];
 
-	return &(((struct sockaddr_in6*)sa)->sin6_addr);
+pthread_mutex_t clientsMutex = PTHREAD_MUTEX_INITIALIZER;
+
+void * handleConnection(void * newClientArg){
+
+    struct Clients newClient = *(struct Clients *) newClientArg;
+    int clientID = newClient.clientID;
+
+    struct message clientMessage;
+    struct message sendMessage;
+
+    int clientSocket = newClient.clientSocket;
+    struct addrinfo hints, *servinfo, *p;
+    int numbytes;
+    char buf[MAXBUFLEN];
+    socklen_t addr_len;
+
+    bool notLoggedIn = true;
+    while(notLoggedIn){
+        
+        
+
+        //receive a message from the client
+        memset(buf, 0, MAXBUFLEN); 
+        if ((numbytes = recv(clientSocket, buf, MAXBUFLEN-1 , 0) == -1)) {
+            perror("Error in receiving from client");
+            exit(1);
+        }
+
+        // message format of buffer received-  <type>:<size of data>:<source>:<data>
+        printf("%s\n", buf);
+        
+        DataToPacket(buf, &clientMessage);
+
+        // Check if first command sent by client is invalid
+        if(clientMessage.type != LOGIN && clientMessage.type != EXIT){
+            printf("You have to login before you do anything else. Please try again\n");
+            goto INVALID_LOGIN;
+        }
+
+        // Early exit, edit clientList to reflect that
+        if(clientMessage.type == EXIT){
+            pthread_mutex_lock(&clientsMutex);
+            clientList[clientID].clientID = INACTIVE_CLIENT;
+            pthread_mutex_unlock(&clientsMutex);
+            return NULL;
+        }
+
+        if(clientMessage.type == LOGIN){
+            unsigned char * username = clientMessage.source;
+            unsigned char * password = clientMessage.data;
+
+            // Get usernames and passwords to check with packet
+            FILE *fp;
+            char str[MAXCHAR];
+            char* filename = "users.txt";
+        
+            fp = fopen(filename, "r");
+            if (fp == NULL){
+                printf("Could not open file %s",filename);
+                exit(1);
+            }
+            while (fgets(str, MAXCHAR, fp) != NULL){
+
+                // Get username and password of one line of file
+                char *token = strtok(str, ";");
+                unsigned char * usernameFromFile = token;
+                token = strtok(NULL, "-");
+                unsigned char * passwordFromFile = token;
+
+                // Check for match
+                if(usernameFromFile == username && passwordFromFile == password){
+                    notLoggedIn = false;
+                }
+            }
+            fclose(fp);
+        }
+
+        INVALID_LOGIN:
+        if(notLoggedIn){
+            sendMessage.type = LO_NAK;
+            sendMessage.size = 0;
+            strcpy(sendMessage.source, "");
+            strcpy(sendMessage.data, "");
+
+            memset(buf, 0, MAXBUFLEN); 
+            PacketToData(buf, &sendMessage);
+            
+            if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0) == -1)) {
+                perror("Error in sending to client\n");
+                exit(1);
+            }
+        }
+    }
+
+    sendMessage.type = LO_ACK;
+    sendMessage.size = 0;
+    strcpy(sendMessage.source, "");
+    strcpy(sendMessage.data, "");
+
+    memset(buf, 0, MAXBUFLEN); 
+    PacketToData(buf, &sendMessage);
+    
+    if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+        perror("Error in sending to client\n");
+        exit(1);
+    }
+
+    printf("Login successful ack sent!");
 }
 
-
-=======
-#include <time.h>
-#include <pthread.h>
-
-#include "packet.h"
-
->>>>>>> a492d5037ceca5db6a4b7c7ebe3b16a8f0223736
 int main(int argc, char const *argv[])
 {
 	int sockfd;
@@ -56,7 +153,6 @@ int main(int argc, char const *argv[])
 	char s[INET_ADDRSTRLEN];
 
     if (argc != 2) {
-<<<<<<< HEAD
 		fprintf(stderr,"usage: server <TCP port number to listen on>\n");
 		exit(1);
 	}
@@ -66,17 +162,6 @@ int main(int argc, char const *argv[])
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family = AF_INET; // set to AF_INET6 to use IPv6
 	hints.ai_socktype = SOCK_STREAM;
-=======
-		fprintf(stderr,"usage: server <UDP listen port>\n");
-		exit(1);
-	}
-
-    //int MYPORT = atoi(argv[1]);
-
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_INET; // set to AF_INET6 to use IPv6
-	hints.ai_socktype = SOCK_DGRAM;
->>>>>>> a492d5037ceca5db6a4b7c7ebe3b16a8f0223736
 	hints.ai_flags = AI_PASSIVE; // use my IP
 
 	if ((rv = getaddrinfo(NULL, argv[1], &hints, &servinfo)) != 0) {
@@ -110,70 +195,33 @@ int main(int argc, char const *argv[])
 
 	printf("listener: waiting to recvfrom...\n");
 
-<<<<<<< HEAD
     if(listen(sockfd, SERVER_CAPACITY) == -1){// 8 clients limit for listening
         perror("Too many connections");
         exit(1);
     }  
 
-    struct sockaddr_in newClientAddr;
-    int newClientSocket;
-    socklen_t newAddrSize;
-
-    //pthread_t newClientThreads[SERVER_CAPACITY];
+    
 
     while(1){
+        
+        struct sockaddr_in newClientAddr;
+        int newClientSocket;
+        socklen_t newAddrSize = sizeof(newClientAddr);
 
+        pthread_t newClientThread;
         // Accept an incoming connection: blocking
-        if(newClientSocket = accept(sockfd, (struct sockaddr * newClientAddr), &newAddrSize) < 0){
+        if(newClientSocket = accept(sockfd, (struct sockaddr *) &newClientAddr, &newAddrSize) < 0){
             perror("Error in creating new socket for client");
             exit(1);
         }
 
+        // Add a client to the list of clients with socketfd and address
+        clientList[totalClients].clientSocket = newClientSocket;
+        clientList[totalClients].clientAddr = newClientAddr;
+        clientList[totalClients].clientID = totalClients;
+        totalClients++;
 
-        pthread_create()
-
-
-        
+        // Create a thread that uses the socket and handles connection
+        pthread_create(&newClientThread, NULL, handleConnection, &clientList[totalClients]);
     }
-
-
-
-
-=======
->>>>>>> a492d5037ceca5db6a4b7c7ebe3b16a8f0223736
-	//receive a message from the client
-	memset(buf, 0, MAXBUFLEN); // first empty the buffer
-	addr_len = sizeof their_addr;
-	if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1 , 0,
-		(struct sockaddr *)&their_addr, &addr_len)) == -1) {
-		perror("recvfrom");
-		exit(1);
-	}
-
-	// printf("listener: got packet from %s\n",
-	// inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr),
-	// 			s, sizeof s));
-	// printf("listener: packet is %d bytes long\n", numbytes);
-	// buf[numbytes] = '\0';
-	// printf("listener: packet contains \"%s\"\n", buf);
-
-	// reply with a message to the client based on the message recieved from the client (if "ftp")
-    if (strcmp(buf, "ftp") == 0) {
-        if ((numbytes = sendto(sockfd, "yes", strlen("yes"), 0,
-			(struct sockaddr *) &their_addr, addr_len)) == -1) {
-            perror("listener: sendto");
-            exit(1);
-        }
-    } else {
-        if ((numbytes = sendto(sockfd, "no", strlen("no"), 0, 
-			(struct sockaddr *) &their_addr, addr_len)) == -1) {
-            perror("listener: sendto");
-            exit(1);
-        }
-    }
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> a492d5037ceca5db6a4b7c7ebe3b16a8f0223736
