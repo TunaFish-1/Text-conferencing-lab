@@ -213,7 +213,13 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 	//check info
 	if (newPacket->type == LO_ACK){
 		//create a thread for active user logging in a session to receive messages from server
-		pthread_create(clientThread, NULL, client_receiver, sockfd);
+		numbytes = pthread_create(clientThread, NULL, client_receiver, sockfd);
+		if (numbytes){
+			fprintf(stderr, "talker: %s failed to log in, thread_create error\n", arg1);
+			close(*sockfd);
+			*sockfd = 0;
+			return;
+		}
 		fprintf(stdout, "talker: %s successfully logged in to %s on port %s\n", arg1, arg3, arg4);
 	}else if (newPacket->type == LO_NAK){
 		fprintf(stderr, "talker: %s failed logged in to %s on port %s due to %s\n", arg1, arg3, arg4, newPacket->data);
@@ -232,7 +238,39 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 }
 
 void logout(int *sockfd, pthread_t *clientThread){
+	if (*sockfd == 0){
+		fprintf(stdout, "Client not logged in\n");
+		return;
+	}
 
+	//create packet
+	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	//populate packet
+	newPacket->type = EXIT;
+	newPacket->size = 0;
+
+	//format packet
+	char buffer[MAXBUFLEN];
+	int numbytes;
+	DataToPacket(buffer, newPacket);
+
+	//send packet
+	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+		perror("talker: send");
+		return;
+	}
+
+	numbytes = pthread_cancel(*clientThread);
+	if(numbytes){
+		fprintf(stderr, "talker: failed to delete thread during log out\n");
+		return;
+	}
+
+	fprintf(stdout, "talker: client successfully logged out\n");
+	close(*sockfd);
+	*sockfd = 0;
+	sessionID = NULL;
+	return;
 }
 
 void joinsession(char *arg1, int *sockfd){
