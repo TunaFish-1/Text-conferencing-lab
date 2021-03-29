@@ -37,7 +37,7 @@ void * handleConnection(void * newClientArg){
     struct Clients newClient = *(struct Clients *) newClientArg;
     int clientID = newClient.clientID;
 
-    struct message clientMessage;
+    struct message* clientMessage = (struct message*) malloc(sizeof(struct message));
     struct message* sendMessage = (struct message*) malloc(sizeof(struct message));
 
     int clientSocket = newClient.clientSocket;
@@ -59,24 +59,24 @@ void * handleConnection(void * newClientArg){
         // message format of buffer received-  <type>:<size of data>:<source>:<data>
         printf("%s\n", buf);
         
-        PacketToData(buf, &clientMessage);
+        PacketToData(buf, clientMessage);
 
         // Check if first command sent by client is invalid
-        if(clientMessage.type != LOGIN && clientMessage.type != EXIT){
+        if(clientMessage->type != LOGIN && clientMessage->type != EXIT){
             printf("You have to login before you do anything else. Please try again\n");
             goto INVALID_LOGIN;
         }
 
         // Early exit, edit clientList to reflect that
-        if(clientMessage.type == EXIT){
+        if(clientMessage->type == EXIT){
             pthread_mutex_lock(&clientsMutex);
             clientList[clientID].clientID = INACTIVE_CLIENT;
             pthread_mutex_unlock(&clientsMutex);
             return NULL;
         }
-        if(clientMessage.type == LOGIN){
-            unsigned char * username = clientMessage.source;
-            unsigned char * password = clientMessage.data;
+        if(clientMessage->type == LOGIN){
+            unsigned char * username = clientMessage->source;
+            unsigned char * password = clientMessage->data;
 
             // Get usernames and passwords to check with packet
             FILE *fp;
@@ -112,9 +112,9 @@ void * handleConnection(void * newClientArg){
         if(notLoggedIn){
             printf("I m not logged in, sending packet\n");
             sendMessage->type = LO_NAK;
-            sendMessage->size = 1;
-            strcpy(sendMessage->source, "0");
-            strcpy(sendMessage->data, "0");
+            sendMessage->size = sizeof("Incorrect password");
+            strcpy(sendMessage->source, "server");
+            strcpy(sendMessage->data, "Incorrect password");
 
             DataToPacket(buf, sendMessage);
             
@@ -123,6 +123,12 @@ void * handleConnection(void * newClientArg){
                 exit(1);
             }
         }
+        // //TESING PURPOSES
+        // memset(buf, 0, MAXBUFLEN); 
+        // if ((numbytes = recv(clientSocket, buf, MAXBUFLEN-1 , 0) == -1)) {
+        //     perror("Error in receiving from client");
+        //     exit(1);
+        // }
     }
     sendMessage->type = LO_ACK;
     sendMessage->size = 1;
