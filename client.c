@@ -180,7 +180,14 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 	clientID = arg1;
 	//populate packet
 	newPacket->type = LOGIN;
-	newPacket->size = sizeof(*arg2);
+	// count size of password:
+	char* strLenChar = arg2;
+	int passwordlen = 0;
+	while(strLenChar!= NULL && *strLenChar!= ' ' && *strLenChar!= '\0' && passwordlen<100){
+		strLenChar++;
+		passwordlen++;
+	}
+	newPacket->size = passwordlen; // Trying to fix a bug here
 	strcpy(newPacket->source, arg1);
 	strcpy(newPacket->data, arg2);
 
@@ -203,7 +210,7 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 		perror("recv");
 		close(*sockfd);
 		*sockfd = 0;
-		free(newPacket);
+		//free(newPacket);
 		return;
 	}
 
