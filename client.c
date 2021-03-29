@@ -196,7 +196,7 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 	DataToPacket(buffer, newPacket);
 
 	//send packet
-	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
 		close(*sockfd);
 		*sockfd = 0;
@@ -267,7 +267,7 @@ int logout(int *sockfd, pthread_t *clientThread){
 	DataToPacket(buffer, newPacket);
 
 	//send packet
-	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
 		free(newPacket);
 		return -1;
@@ -312,7 +312,7 @@ void joinsession(char *arg1, int *sockfd){
 	DataToPacket(buffer, newPacket);
 
 	//send packet
-	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
 		free(newPacket);
 		return;
@@ -346,7 +346,7 @@ void leavesession(int *sockfd){
 	DataToPacket(buffer, newPacket);
 
 	//send packet
-	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
 		free(newPacket);
 		return;
@@ -380,7 +380,7 @@ void createsession(char *arg1, int *sockfd){
 	DataToPacket(buffer, newPacket);
 
 	//send packet
-	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
 		free(newPacket);
 		return;
@@ -410,7 +410,7 @@ void list(int *sockfd){
 	DataToPacket(buffer, newPacket);
 
 	//send packet
-	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
 		free(newPacket);
 		return;
@@ -452,7 +452,7 @@ void messageTransfer(char *message, int *sockfd){
 	DataToPacket(buffer, newPacket);
 
 	//send packet
-	if ((numbytes = send(*sockfd, buffer, strlen(buffer), 0)) == -1) {
+	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
 		free(newPacket);
 		return;

@@ -14,56 +14,85 @@
 #include "packet.h"
 
 int totalClients = 0;
+int totalSessions = 0;
 
 struct Clients{
     int clientSocket;
-    int session_id;
+    char* sessionName;
     char* clientUsername;
     int clientID;
+    bool joinedSession;
+    int sessionIndex;
+    bool loggedIn;
 };
 
+struct Session{
+    int sessionIndex;
+    char* sessionName;
+    int numClients;
+}
 
 
-#define SERVER_CAPACITY 10
+
+#define SERVER_CAPACITY 20
+#define SESSION_CAPACITY 20
 #define INACTIVE_CLIENT -1
+#define INACTIVE_SESSION -1
 #define MAXCHAR 1000
 
 struct Clients clientList[SERVER_CAPACITY];
+struct Session sessionList[SESSION_CAPACITY];
+
 
 pthread_mutex_t clientsMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t sessionsMutex = PTHREAD_MUTEX_INITIALIZER;
 
 void * handleConnection(void * newClientArg){
 
     struct Clients newClient = *(struct Clients *) newClientArg;
     int clientID = newClient.clientID;
+    newClient.joinedSession = false;
+    newClient.loggedIn = false;
 
     struct message* clientMessage = (struct message*) malloc(sizeof(struct message));
     struct message* sendMessage = (struct message*) malloc(sizeof(struct message));
 
     int clientSocket = newClient.clientSocket;
-    // struct addrinfo hints, *servinfo, *p;
-    int numbytes;
+    int numbytes = 0;
     char buf[MAXBUFLEN];
-    // socklen_t addr_len;
+
+    char* reasonForFailure = "Incorrect username or password"; //default reason for failure
 
     bool notLoggedIn = true;
     while(notLoggedIn){
         
+        // empty the messages
+        clientMessage->source = "";
+        clientMessage->data = "";
+        sendMessage->source = "";
+        sendMessage->data = "";
+
+        
         //receive a message from the client
         memset(buf, 0, MAXBUFLEN); 
-        if ((numbytes = recv(clientSocket, buf, MAXBUFLEN-1 , 0) == -1)) {
-            perror("Error in receiving from client");
-            exit(1);
+        while(numbytes == 0){
+            if ((numbytes = recv(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                perror("Error in receiving from client");
+                exit(1);
+            }
+            sleep(0.7);
         }
 
+
         // message format of buffer received-  <type>:<size of data>:<source>:<data>
-        printf("%s\n", buf);
+        // printf("%s\n", buf);
         
         PacketToData(buf, clientMessage);
 
         // Check if first command sent by client is invalid
         if(clientMessage->type != LOGIN && clientMessage->type != EXIT){
             printf("You have to login before you do anything else. Please try again\n");
+            reasonForFailure = "You have to login first!";
             goto INVALID_LOGIN;
         }
 
@@ -102,6 +131,8 @@ void * handleConnection(void * newClientArg){
                 // Check for match
                 if(usernameLegal && passwordLegal){
                     notLoggedIn = false;
+                    newClient.clientUsername = usernameLegal;
+                    newClient.loggedIn = true;
                     break;
                 }
             }
@@ -112,13 +143,13 @@ void * handleConnection(void * newClientArg){
         if(notLoggedIn){
             printf("I m not logged in, sending packet\n");
             sendMessage->type = LO_NAK;
-            sendMessage->size = sizeof("Incorrect password");
+            sendMessage->size = sizeof(reasonForFailure);
             strcpy(sendMessage->source, "server");
-            strcpy(sendMessage->data, "Incorrect password");
+            strcpy(sendMessage->data, reasonForFailure);
 
             DataToPacket(buf, sendMessage);
             
-            if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0) == -1)) {
+            if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
                 perror("Error in sending to client\n");
                 exit(1);
             }
@@ -129,9 +160,10 @@ void * handleConnection(void * newClientArg){
         //     perror("Error in receiving from client");
         //     exit(1);
         // }
+        bzero(buf, sizeof(buf));
     }
     sendMessage->type = LO_ACK;
-    sendMessage->size = 1;
+    sendMessage->size = sizeof("no-data");
     strcpy(sendMessage->source, "server");
     strcpy(sendMessage->data, "no-data");
     
@@ -140,9 +172,122 @@ void * handleConnection(void * newClientArg){
         perror("Error in sending to client\n");
         exit(1);
     }
-
+    
     printf("Login successful ack sent!\n");
+
+
+
+    // --- Check command other than login now ---
+
+    while(loggedIn){
+        // receive a message from the client
+        memset(buf, 0, MAXBUFLEN); 
+        while(numbytes == 0){
+            if ((numbytes = recv(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                perror("Error in receiving from client");
+                exit(1);
+            }
+            sleep(0.7);
+        }
+
+        // empty the messages
+        clientMessage->source = "";
+        clientMessage->data = "";
+        sendMessage->source = "";
+        sendMessage->data = "";
+
+        PacketToData(buf, clientMessage);
+
+        if(clientMessage->type == LOGIN){
+            sendMessage->type = LO_NAK;
+            sendMessage->size = sizeof("You are already logged in. Logout first");
+            strcpy(sendMessage->source, "server");
+            strcpy(sendMessage->data, "You are already logged in. Logout first");
+
+            DataToPacket(buf, sendMessage);
+            
+            if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                perror("Error in sending to client\n");
+                exit(1);
+            }
+        }
+
+        // exit the session, delete the session if the last thread
+        // make itself inactive in list of clients
+        // logout before exiting?
+        else if(clientMessage->type == EXIT){
+
+            pthread_mutex_lock(&sessionsMutex);
+            if(newClient.joinedSession){
+                int sessionIndex = newClient.sessionIndex;
+                sessionList[sessionIndex].numClients-= 1; 
+
+                // if no clients, inactivate the session
+                if(sessionList[sessionIndex].numClients == 0){
+                    sessionList[sessionIndex].sessionIndex = INACTIVE_SESSION;
+                }
+            }
+            pthread_mutex_unlock(&sessionsMutex);
+            pthread_mutex_lock(&clientsMutex);
+            clientList[clientID].clientID = INACTIVE_CLIENT;
+            pthread_mutex_unlock(&clientsMutex);
+            return NULL;
+        }
+
+        else if(clientMessage->type == NEW_SESS){
+            if(newClient.joinedSession)
+                goto LEAVESESSION;
+            
+
+            pthread_mutex_lock(&sessionsMutex);
+
+            // create session and add name to list
+            Session newSession;
+            newSession.sessionIndex = totalSessions;
+            newSession.sessionName = clientMessage->data;
+            newSession.numClients = 0; // join session will increment count
+            // maybe not set numClients correctly?
+            sessionList[totalSessions] = newSession;
+            totalSessions++;
+
+            // send ack for new session
+            sendMessage->type = NEW_SESS;
+            sendMessage->size = sizeof("New session created succefully!");
+            sendMessage->source = "server";
+            sendMessage->data = "New session created succefully!";
+
+            DataToPacket(buf, sendMessage);
+            if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                perror("Error in sending to client\n");
+                exit(1);
+            }
+
+            pthread_mutex_unlock(&sessionsMutex);
+
+            goto JOINSESSION;
+        }
+
+        else if(clientMessage->type == JOIN){
+            JOINSESSION:
+            pthread_mutex_lock(&sessionsMutex);
+            
+            pthread_mutex_unlock(&sessionsMutex);
+
+
+        }
+
+        else if(clientMessage->type == LEAVE_SESS){
+            LEAVESESSION:
+
+        }
+
+
+    }
+
+
     return NULL;
+
+    
 }
 
 int main(int argc, char const *argv[])
@@ -218,7 +363,7 @@ int main(int argc, char const *argv[])
             perror("Error in creating new socket for client");
             exit(1);
         }
-        printf("newClientSocket: %d\n", newClientSocket);
+        // printf("newClientSocket: %d\n", newClientSocket);
         inet_ntop(newClientAddr.ss_family, get_in_addr((struct sockaddr *)&newClientAddr), addrstlen, sizeof(addrstlen));
 
         // Add a client to the list of clients with socketfd and address
