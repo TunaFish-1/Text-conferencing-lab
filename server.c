@@ -208,6 +208,7 @@ void * handleConnection(void * newClientArg){
         // logout before exiting?
         if(clientMessage->type == EXIT){
             EXIT_AFTER_LOGIN:
+            printf("Please dont leave!!!");
             pthread_mutex_lock(&sessionsMutex);
             pthread_mutex_lock(&clientsMutex);
             if(newClient.joinedSession){

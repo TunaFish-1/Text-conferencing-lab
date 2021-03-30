@@ -257,9 +257,9 @@ int logout(int *sockfd, pthread_t *clientThread){
 	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
 	//populate packet
 	newPacket->type = EXIT;
-	newPacket->size = 0;
+	newPacket->size = sizeof(strlen("no-data"));
 	strcpy(newPacket->source, clientID);
-	strcpy(newPacket->data, NULL);
+	strcpy(newPacket->data, "no-data");
 
 	//format packet
 	char buffer[MAXBUFLEN];
