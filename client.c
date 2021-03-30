@@ -33,7 +33,7 @@ void messageTransfer(char *message, int *sockfd);
 
 //global variables
 char *sessionID = NULL;
-char *clientID = NULL;
+char clientID[MAX_NAME];
 
 int main(int argc, char *argv[])
 {
@@ -81,7 +81,9 @@ int main(int argc, char *argv[])
 				perror("too many arguments\n");
 				goto ask_input;
 			}
+			printf("entering logout\n");
 			logout(&sockfd, &clientThread);
+			printf("return from logout\n");
 		}else if (strcmp(command, "/joinsession")==0){ 
 			if (arg1[0] == '\0') {
 				perror("too few arguments or too long\n");
@@ -177,7 +179,7 @@ void login(char *arg1, char *arg2, char *arg3, char *arg4, int *sockfd, pthread_
 
 	//create packet
 	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
-	clientID = arg1;
+	strcpy(clientID, arg1);
 	//populate packet
 	newPacket->type = LOGIN;
 	// count size of password:
@@ -254,29 +256,29 @@ int logout(int *sockfd, pthread_t *clientThread){
 	}
 
 	//create packet
-	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	struct message newPacket;
 	//populate packet
-	newPacket->type = EXIT;
-	newPacket->size = 0;
-	strcpy(newPacket->source, clientID);
-	strcpy(newPacket->data, NULL);
+	newPacket.type = EXIT;
+	newPacket.size = sizeof(strlen("no-data"));
+	strcpy(newPacket.source, clientID);
+	strcpy(newPacket.data, "no-data");
 
 	//format packet
 	char buffer[MAXBUFLEN];
 	int numbytes;
-	DataToPacket(buffer, newPacket);
+	DataToPacketNotPointer(buffer, newPacket);
 
 	//send packet
 	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
-		free(newPacket);
+		//free(newPacket);
 		return -1;
 	}
 
 	numbytes = pthread_cancel(*clientThread);
-	if(numbytes){
+	if(numbytes!=0){
 		fprintf(stderr, "talker: failed to delete thread during log out\n");
-		free(newPacket);
+		//free(newPacket);
 		return -1;
 	}
 
@@ -284,7 +286,7 @@ int logout(int *sockfd, pthread_t *clientThread){
 	close(*sockfd);
 	*sockfd = 0;
 	sessionID = NULL;
-	free(newPacket);
+	//free(newPacket);
 	return 1;
 }
 
@@ -299,26 +301,26 @@ void joinsession(char *arg1, int *sockfd){
 	}
 
 	//create packet
-	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	struct message newPacket;
 	//populate packet
-	newPacket->type = JOIN;
-	newPacket->size = sizeof(*arg1);
-	strcpy(newPacket->source, clientID);
-	strcpy(newPacket->data, arg1);
+	newPacket.type = JOIN;
+	newPacket.size = sizeof(*arg1);
+	strcpy(newPacket.source, clientID);
+	strcpy(newPacket.data, arg1);
 
 	//format packet
 	char buffer[MAXBUFLEN];
 	int numbytes;
-	DataToPacket(buffer, newPacket);
+	DataToPacketNotPointer(buffer, newPacket);
 
 	//send packet
 	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
-		free(newPacket);
+		//free(newPacket);
 		return;
 	}
 
-	free(newPacket);
+	//free(newPacket);
 	return;
 }
 
@@ -333,26 +335,27 @@ void leavesession(int *sockfd){
 	}
 
 	//create packet
-	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	struct message newPacket;
 	//populate packet
-	newPacket->type = LEAVE_SESS;
-	newPacket->size = 0;
-	strcpy(newPacket->source, clientID);
-	strcpy(newPacket->data, NULL);
+	newPacket.type = LEAVE_SESS;
+	newPacket.size = sizeof(strlen("no-data"));
+	strcpy(newPacket.source, clientID);
+	strcpy(newPacket.data, "no-data");
 
 	//format packet
 	char buffer[MAXBUFLEN];
 	int numbytes;
-	DataToPacket(buffer, newPacket);
+	DataToPacketNotPointer(buffer, newPacket);
 
 	//send packet
 	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
-		free(newPacket);
+		//free(newPacket);
 		return;
 	}
 
-	free(newPacket);
+	sessionID = NULL;
+	//free(newPacket);
 	return;
 }
 
@@ -367,26 +370,30 @@ void createsession(char *arg1, int *sockfd){
 	}
 
 	//create packet
-	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	struct message newPacket;
 	//populate packet
-	newPacket->type = NEW_SESS;
-	newPacket->size = sizeof(*arg1);;
-	strcpy(newPacket->source, clientID);
-	strcpy(newPacket->data, arg1);
+	newPacket.type = NEW_SESS;
+	newPacket.size = sizeof(strlen(arg1));;
+	strcpy(newPacket.source, clientID);
+	strcpy(newPacket.data, arg1);
+
+	// printf("A\n");
 
 	//format packet
 	char buffer[MAXBUFLEN];
 	int numbytes;
-	DataToPacket(buffer, newPacket);
+	DataToPacketNotPointer(buffer, newPacket);
 
 	//send packet
 	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
-		free(newPacket);
+		//free(newPacket);
 		return;
 	}
 
-	free(newPacket);
+	// printf("B\n");
+
+	//free(newPacket);
 	return;
 }
 
@@ -397,26 +404,26 @@ void list(int *sockfd){
 	}
 
 	//create packet
-	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	struct message newPacket;
 	//populate packet
-	newPacket->type = QUERY;
-	newPacket->size = 0;
-	strcpy(newPacket->source, clientID);
-	strcpy(newPacket->data, NULL);
+	newPacket.type = QUERY;
+	newPacket.size = sizeof(strlen("no-data"));
+	strcpy(newPacket.source, clientID);
+	strcpy(newPacket.data, "no-data");
 
 	//format packet
 	char buffer[MAXBUFLEN];
 	int numbytes;
-	DataToPacket(buffer, newPacket);
+	DataToPacketNotPointer(buffer, newPacket);
 
 	//send packet
 	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
-		free(newPacket);
+		//free(newPacket);
 		return;
 	}
 
-	free(newPacket);
+	//free(newPacket);
 	return;
 }
 
@@ -439,26 +446,26 @@ void messageTransfer(char *message, int *sockfd){
 	}
 
 	//create packet
-	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	struct message newPacket;
 	//populate packet
-	newPacket->type = MESSAGE;
-	newPacket->size = sizeof(*message);
-	strcpy(newPacket->source, clientID);
-	strcpy(newPacket->data, message);
+	newPacket.type = MESSAGE;
+	newPacket.size = sizeof(*message);
+	strcpy(newPacket.source, clientID);
+	strcpy(newPacket.data, message);
 
 	//format packet
 	char buffer[MAXBUFLEN];
 	int numbytes;
-	DataToPacket(buffer, newPacket);
+	DataToPacketNotPointer(buffer, newPacket);
 
 	//send packet
 	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
 		perror("talker: send");
-		free(newPacket);
+		//free(newPacket);
 		return;
 	}
 
-	free(newPacket);
+	//free(newPacket);
 	return;
 
 }
@@ -585,11 +592,12 @@ void *client_receiver(void *socketfd){
 	while(1){
 		//receive a message from the server
 		memset(buffer, 0, MAXBUFLEN); // first empty the buffer
+		printf("hold A\n");
 		if ((numbytes = recv(*sockfd, buffer, MAXBUFLEN-1 , 0)) == -1) {
 			perror("recv");
 			return NULL;
 		}
-
+		printf("hold B\n");
 		//format
 		PacketToData(buffer, newPacket);
 
