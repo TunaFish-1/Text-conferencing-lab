@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
 			}
 			leavesession(&sockfd);
 		}else if (strcmp(command, "/createsession")==0){
-			if (arg1[0] != '\0') {
+			if (arg2[0] != '\0') {
 				perror("too many arguments\n");
 				goto ask_input;
 			}
