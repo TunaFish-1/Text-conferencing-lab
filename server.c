@@ -205,8 +205,9 @@ void * handleConnection(void * newClientArg){
 
         // exit the session, delete the session if the last thread
         // make itself inactive in list of clients
-        // logout before exiting?
+        // logout before exiting? 
         if(clientMessage->type == EXIT){
+            printf("client logged out\n");
             EXIT_AFTER_LOGIN:
             printf("Please dont leave!!!");
             pthread_mutex_lock(&sessionsMutex);
@@ -261,7 +262,7 @@ void * handleConnection(void * newClientArg){
 
 
             // send ack for new session
-            sendMessage->type = NEW_SESS;
+            sendMessage->type = NS_ACK;
             sendMessage->size = sizeof("New session created succefully!");
             strcpy(sendMessage->source, "server");
             strcpy(sendMessage->data,"New session created succefully!");
