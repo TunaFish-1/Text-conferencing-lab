@@ -61,10 +61,11 @@ int main(int argc, char *argv[])
 		if (command[0] == '\0') {
 			perror("too few arguments or too long\n");
 			goto ask_input;
-		} else if (extra[0] != '\0') {
-			perror("too many arguments\n");
-			goto ask_input;
 		}
+		// } else if (extra[0] != '\0') {
+		// 	perror("too many arguments\n");
+		// 	goto ask_input;
+		// }
 
 		//check command
 		if (strcmp(command, "/login")==0){
@@ -592,12 +593,10 @@ void *client_receiver(void *socketfd){
 	while(1){
 		//receive a message from the server
 		memset(buffer, 0, MAXBUFLEN); // first empty the buffer
-		printf("hold A\n");
 		if ((numbytes = recv(*sockfd, buffer, MAXBUFLEN-1 , 0)) == -1) {
 			perror("recv");
 			return NULL;
 		}
-		printf("hold B\n");
 		//format
 		PacketToData(buffer, newPacket);
 

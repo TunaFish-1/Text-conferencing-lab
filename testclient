@@ -42,7 +42,7 @@ echo "/list" | tee c1_d > c1_in
 
 sleep 1
 # Testing login on client 2 with a user that is already logged in. Should fail
-echo "/login $1 $2 $5 $6" | tee c2_d > c2_in
+#echo "/login $1 $2 $5 $6" | tee c2_d > c2_in
 sleep 1
 # Testing login with correct password on client 2. Should succeed
 echo "/login $3 $4 $5 $6" | tee c2_d > c2_in
