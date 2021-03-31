@@ -259,7 +259,7 @@ int logout(int *sockfd, pthread_t *clientThread){
 	struct message newPacket;
 	//populate packet
 	newPacket.type = EXIT;
-	newPacket.size = sizeof(strlen("no-data"));
+	newPacket.size = strlen("no-data");
 	strcpy(newPacket.source, clientID);
 	strcpy(newPacket.data, "no-data");
 
@@ -338,7 +338,7 @@ void leavesession(int *sockfd){
 	struct message newPacket;
 	//populate packet
 	newPacket.type = LEAVE_SESS;
-	newPacket.size = sizeof(strlen("no-data"));
+	newPacket.size = strlen("no-data");
 	strcpy(newPacket.source, clientID);
 	strcpy(newPacket.data, "no-data");
 
@@ -373,7 +373,7 @@ void createsession(char *arg1, int *sockfd){
 	struct message newPacket;
 	//populate packet
 	newPacket.type = NEW_SESS;
-	newPacket.size = sizeof(strlen(arg1));;
+	newPacket.size = strlen(arg1);
 	strcpy(newPacket.source, clientID);
 	strcpy(newPacket.data, arg1);
 
@@ -407,7 +407,7 @@ void list(int *sockfd){
 	struct message newPacket;
 	//populate packet
 	newPacket.type = QUERY;
-	newPacket.size = sizeof(strlen("no-data"));
+	newPacket.size = strlen("no-data");
 	strcpy(newPacket.source, clientID);
 	strcpy(newPacket.data, "no-data");
 
