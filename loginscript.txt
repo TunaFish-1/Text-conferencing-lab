@@ -1,2 +1,5 @@
 /login romil8jain 123 127.0.0.1 5000
 /login tuna-fish1 456 127.0.0.1 5000
+
+/createsession help
+/joinsession help
