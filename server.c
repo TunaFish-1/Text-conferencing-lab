@@ -333,12 +333,16 @@ void * handleConnection(void * newClientArg){
             joiningSessionHelp = false;
             pthread_mutex_lock(&clientsMutex);
 
+            char * sessionToJoin = (char *) malloc(clientMessage->size);
+            strncpy(sessionToJoin, clientMessage->data, clientMessage->size);
+            *(sessionToJoin + clientMessage->size) = 0;
+
             for(int i =0; i<totalSessions; i++){
                 if(sessionList[i].sessionIndex != INACTIVE_SESSION){
-                    if(strcmp(sessionList[i].sessionName,clientMessage->data) == 0){
+                    if(strcmp(sessionList[i].sessionName,sessionToJoin) == 0){
                         newClient->sessionIndex = i;
                         newClient->sessionName = (char *) malloc(clientMessage->size);
-                        strncpy(newClient->sessionName, clientMessage->data, clientMessage->size);
+                        strncpy(newClient->sessionName, sessionToJoin, clientMessage->size);
                         *(newClient->sessionName + clientMessage->size) = 0;
                         newClient->joinedSession = true;
                         sessionList[i].numClients+= 1;
@@ -404,7 +408,7 @@ void * handleConnection(void * newClientArg){
 
             // if no clients, inactivate the session
             if(sessionList[sessionIndex].numClients == 0){
-                printf("Everyone has left session %s : Deactivating", sessionList[sessionIndex].sessionName);
+                printf("Everyone has left session %s : Deactivating\n", sessionList[sessionIndex].sessionName);
                 sessionList[sessionIndex].sessionIndex = INACTIVE_SESSION;
             }
 
@@ -476,6 +480,7 @@ void * handleConnection(void * newClientArg){
             sendMessage->size = resultLen;
             strcpy(sendMessage->source, newClient->clientUsername);
             strncpy(sendMessage->data, result, resultLen);
+            *(sendMessage->data + resultLen) = 0;
             free(result);
 
             {
