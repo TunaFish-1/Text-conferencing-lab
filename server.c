@@ -114,6 +114,23 @@ void * handleConnection(void * newClientArg){
         unsigned char * password = (unsigned char *) malloc(clientMessage->size);
         strncpy(password, clientMessage->data, clientMessage->size);
         *(password + clientMessage->size) = 0;
+        
+
+        // check if user has already logged in
+        pthread_mutex_lock(&clientsMutex);
+        int i;
+        for(i = 0; i<totalClients; i++){
+
+            if(clientList[i].clientIndex!= INACTIVE_CLIENT){
+                if(clientList[i].clientUsername !=NULL && strcmp(clientList[i].clientUsername, username) == 0){
+                    reasonForFailure = "Another client with same username already logged in";
+                    pthread_mutex_unlock(&clientsMutex);
+                    goto INVALID_LOGIN;
+                }
+            }
+        }
+        pthread_mutex_unlock(&clientsMutex);
+
 
         // Get usernames and passwords to check with packet
         FILE *fp;
@@ -163,7 +180,7 @@ void * handleConnection(void * newClientArg){
 
         {
             char buf[MAXBUFLEN];
-            DataToPacket(buf, sendMessage);
+            DataToPacketSafe(buf, sendMessage);
             
             if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
                 perror("Error in sending to client\n");
@@ -187,15 +204,18 @@ void * handleConnection(void * newClientArg){
     strcpy(sendMessage->source, "server");
     strcpy(sendMessage->data, "no-data");
 
+
     {
         char buf[MAXBUFLEN];
-        DataToPacket(buf, sendMessage);
+        DataToPacketSafe(buf, sendMessage);
         if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
             perror("Error in sending to client\n");
             exit(1);
         }
     }
     
+    free(clientMessage);
+    free(sendMessage);
     printf("Login successful ack sent!\n");
 
     // bool loggedIn = true;
@@ -203,11 +223,8 @@ void * handleConnection(void * newClientArg){
 
     while(1){
 
-        // empty the messages
-        free(clientMessage);
-        free(sendMessage);
-        clientMessage = (struct message*) malloc(sizeof(struct message));
-        sendMessage = (struct message*) malloc(sizeof(struct message));
+        struct message* clientMessaging = (struct message*) malloc(sizeof(struct message));
+        struct message* sendMessaging = (struct message*) malloc(sizeof(struct message));
 
         // Helper variables
         bool joiningSessionHelp = false;
@@ -223,18 +240,18 @@ void * handleConnection(void * newClientArg){
             if(numbytes == 0)
                 goto EXIT_AFTER_LOGIN;
 
-            PacketToData(buf, clientMessage);
+            PacketToData(buf, clientMessaging);
         }
 
-        if(clientMessage->type == LOGIN){
-            sendMessage->type = LO_NAK;
-            sendMessage->size = sizeof("You are already logged in. Logout first");
-            strcpy(sendMessage->source, "server");
-            strcpy(sendMessage->data, "You are already logged in. Logout first");
+        if(clientMessaging->type == LOGIN){
+            sendMessaging->type = LO_NAK;
+            sendMessaging->size = sizeof("You are already logged in. Logout first");
+            strcpy(sendMessaging->source, "server");
+            strcpy(sendMessaging->data, "You are already logged in. Logout first");
             
             {
                 char buf[MAXBUFLEN];
-                DataToPacket(buf, sendMessage);
+                DataToPacketSafe(buf, sendMessaging);
                 
                 if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
                     perror("Error in sending to client\n");
@@ -246,7 +263,7 @@ void * handleConnection(void * newClientArg){
         // exit the session, delete the session if the last thread
         // make itself inactive in list of clients
         // logout before exiting? 
-        if(clientMessage->type == EXIT){
+        if(clientMessaging->type == EXIT){
             EXIT_AFTER_LOGIN:
             printf("Please dont leave %s!!!\n", newClient->clientUsername);
             pthread_mutex_lock(&clientsMutex);
@@ -263,15 +280,15 @@ void * handleConnection(void * newClientArg){
             pthread_mutex_unlock(&clientsMutex);
 
             // free malloced data
-            free(clientMessage);
-            free(sendMessage);
+            free(clientMessaging);
+            free(sendMessaging);
             free(newClient->clientUsername);
             free(newClient);
             close(clientSocket);
             return NULL;
         }
 
-        if(clientMessage->type == NEW_SESS){
+        if(clientMessaging->type == NEW_SESS){
             if(newClient->joinedSession){
                 createSessionHelp = true; // helps to return back after leaving session
                 goto LEAVESESSION;
@@ -284,18 +301,18 @@ void * handleConnection(void * newClientArg){
             // create session and add name to list
             struct Session newSession;
             newSession.sessionIndex = totalSessions;
-            newSession.sessionName = (char *) malloc(clientMessage->size);
-            strncpy(newSession.sessionName, clientMessage->data, clientMessage->size);
-            *(newSession.sessionName + clientMessage->size) = 0;
+            newSession.sessionName = (char *) malloc(clientMessaging->size);
+            strncpy(newSession.sessionName, clientMessaging->data, clientMessaging->size);
+            *(newSession.sessionName + clientMessaging->size) = 0;
             newSession.numClients = 1; 
             sessionList[totalSessions] = newSession;
             
 
             // join the session
             newClient->sessionIndex = totalSessions;
-            newClient->sessionName = (char *) malloc(clientMessage->size);
-            strncpy(newClient->sessionName,clientMessage->data, clientMessage->size);
-            *(newClient->sessionName + clientMessage->size) = 0;
+            newClient->sessionName = (char *) malloc(clientMessaging->size);
+            strncpy(newClient->sessionName,clientMessaging->data, clientMessaging->size);
+            *(newClient->sessionName + clientMessaging->size) = 0;
             newClient->joinedSession = true;
 
             // increment count for sessions array
@@ -306,14 +323,14 @@ void * handleConnection(void * newClientArg){
             pthread_mutex_unlock(&clientsMutex);
 
             // send ack for new session
-            sendMessage->type = NS_ACK;
-            sendMessage->size = sizeof("New session created succefully!");
-            strcpy(sendMessage->source, "server");
-            strcpy(sendMessage->data,"New session created succefully!");
+            sendMessaging->type = NS_ACK;
+            sendMessaging->size = sizeof("New session created succefully!");
+            strcpy(sendMessaging->source, "server");
+            strcpy(sendMessaging->data,"New session created succefully!");
 
             {
                 char buf[MAXBUFLEN];
-                DataToPacket(buf, sendMessage);
+                DataToPacketSafe(buf, sendMessaging);
                 if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
                     perror("Error in sending to client\n");
                     exit(1);
@@ -321,7 +338,7 @@ void * handleConnection(void * newClientArg){
             }
         }
 
-        if(clientMessage->type == JOIN){
+        if(clientMessaging->type == JOIN){
             JOINSESSION:
 
             if(newClient->joinedSession){
@@ -333,17 +350,17 @@ void * handleConnection(void * newClientArg){
             joiningSessionHelp = false;
             pthread_mutex_lock(&clientsMutex);
 
-            char * sessionToJoin = (char *) malloc(clientMessage->size);
-            strncpy(sessionToJoin, clientMessage->data, clientMessage->size);
-            *(sessionToJoin + clientMessage->size) = 0;
+            char * sessionToJoin = (char *) malloc(clientMessaging->size);
+            strncpy(sessionToJoin, clientMessaging->data, clientMessaging->size);
+            *(sessionToJoin + clientMessaging->size) = 0;
 
             for(int i =0; i<totalSessions; i++){
                 if(sessionList[i].sessionIndex != INACTIVE_SESSION){
                     if(strcmp(sessionList[i].sessionName,sessionToJoin) == 0){
                         newClient->sessionIndex = i;
-                        newClient->sessionName = (char *) malloc(clientMessage->size);
-                        strncpy(newClient->sessionName, sessionToJoin, clientMessage->size);
-                        *(newClient->sessionName + clientMessage->size) = 0;
+                        newClient->sessionName = (char *) malloc(clientMessaging->size);
+                        strncpy(newClient->sessionName, sessionToJoin, clientMessaging->size);
+                        *(newClient->sessionName + clientMessaging->size) = 0;
                         newClient->joinedSession = true;
                         sessionList[i].numClients+= 1;
                         break;
@@ -357,14 +374,14 @@ void * handleConnection(void * newClientArg){
 
             if(newClient->joinedSession){
                 // send ack for join session
-                sendMessage->type = JN_ACK;
-                sendMessage->size = sizeof("Joined session succefully!");
-                strcpy(sendMessage->source, "server");
-                strcpy(sendMessage->data,"Joined session succefully!");
+                sendMessaging->type = JN_ACK;
+                sendMessaging->size = sizeof("Joined session succefully!");
+                strcpy(sendMessaging->source, "server");
+                strcpy(sendMessaging->data,"Joined session succefully!");
 
                 {
                     char buf[MAXBUFLEN];
-                    DataToPacket(buf, sendMessage);
+                    DataToPacketSafe(buf, sendMessaging);
                     if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
                         perror("Error in sending to client\n");
                         exit(1);
@@ -373,14 +390,14 @@ void * handleConnection(void * newClientArg){
             }
             else if(!newClient->joinedSession){
                 // send nak for join session
-                sendMessage->type = JN_NAK;
-                sendMessage->size = sizeof("The session you entered is invalid");
-                strcpy(sendMessage->source, "server");
-                strcpy(sendMessage->data, "The session you entered is invalid");
+                sendMessaging->type = JN_NAK;
+                sendMessaging->size = sizeof("The session you entered is invalid");
+                strcpy(sendMessaging->source, "server");
+                strcpy(sendMessaging->data, "The session you entered is invalid");
 
                 {
                     char buf[MAXBUFLEN];
-                    DataToPacket(buf, sendMessage);
+                    DataToPacketSafe(buf, sendMessaging);
                     if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
                         perror("Error in sending to client\n");
                         exit(1);
@@ -389,7 +406,7 @@ void * handleConnection(void * newClientArg){
             }
         }
 
-        if(clientMessage->type == LEAVE_SESS){
+        if(clientMessaging->type == LEAVE_SESS){
             LEAVESESSION:
             pthread_mutex_lock(&clientsMutex);
 
@@ -424,7 +441,7 @@ void * handleConnection(void * newClientArg){
             }
         }
 
-        if(clientMessage->type == MESSAGE){
+        if(clientMessaging->type == MESSAGE){
             
             pthread_mutex_lock(&clientsMutex);
             if(newClient->joinedSession == true){
@@ -433,21 +450,19 @@ void * handleConnection(void * newClientArg){
                     
                     // check the client list item if it is a part of same session
                     if(clientList[i].clientIndex!= INACTIVE_CLIENT){
-                        if(clientList[i].sessionIndex == newClient->sessionIndex){
+                        if(clientList[i].joinedSession && clientList[i].sessionIndex == newClient->sessionIndex){
                             
-                            // empty client message
-                            free(sendMessage);
-                            sendMessage = (struct message*) malloc(sizeof(struct message));
+                            struct message* sendText = (struct message*) malloc(sizeof(struct message));
 
                             // send message to all clients connected
-                            sendMessage->type = MESSAGE;
-                            sendMessage->size = clientMessage->size;
-                            strcpy(sendMessage->source, newClient->clientUsername);
-                            strncpy(sendMessage->data, clientMessage->data, clientMessage->size);
-                            *(sendMessage->data + clientMessage->size) = 0;
+                            sendText->type = MESSAGE;
+                            sendText->size = clientMessaging->size;
+                            strcpy(sendText->source, newClient->clientUsername);
+                            strncpy(sendText->data, clientMessaging->data, clientMessaging->size);
+                            *(sendText->data + clientMessaging->size) = 0;
                             {
                                 char buf[MAXBUFLEN];
-                                DataToPacket(buf, sendMessage);
+                                DataToPacketSafe(buf, sendText);
                                 if ((numbytes = send(clientList[i].clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
                                     perror("Error in sending to client\n");
                                     exit(1);
@@ -462,8 +477,12 @@ void * handleConnection(void * newClientArg){
             pthread_mutex_unlock(&clientsMutex);
         }
 
-        if(clientMessage->type == QUERY){
+        if(clientMessaging->type == QUERY){
             pthread_mutex_lock(&clientsMutex);
+
+            // empty client message
+            free(sendMessaging);
+            sendMessaging = (struct message*) malloc(sizeof(struct message));
 
             char * result = (char*) malloc(1000);
             int i;
@@ -476,16 +495,16 @@ void * handleConnection(void * newClientArg){
             }
             printf("%s\n",result);
             int resultLen = strlen(result);
-            sendMessage->type = QU_ACK;
-            sendMessage->size = resultLen;
-            strcpy(sendMessage->source, newClient->clientUsername);
-            strncpy(sendMessage->data, result, resultLen);
-            *(sendMessage->data + resultLen) = 0;
+            sendMessaging->type = QU_ACK;
+            sendMessaging->size = resultLen;
+            strcpy(sendMessaging->source, newClient->clientUsername);
+            strncpy(sendMessaging->data, result, resultLen);
+            *(sendMessaging->data + resultLen) = 0;
             free(result);
 
             {
                 char buf[MAXBUFLEN];
-                DataToPacket(buf, sendMessage);
+                DataToPacketSafe(buf, sendMessaging);
                 if ((numbytes = send(clientList[clientIndex].clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
                     perror("Error in sending to client\n");
                     exit(1);
@@ -494,6 +513,8 @@ void * handleConnection(void * newClientArg){
             
             pthread_mutex_unlock(&clientsMutex);
         }
+        free(clientMessaging);
+        free(sendMessaging);
     }
 
 

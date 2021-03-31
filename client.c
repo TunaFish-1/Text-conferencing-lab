@@ -584,23 +584,21 @@ void askInput(char *buf, char *command, char *arg1, char *arg2, char *arg3, char
 }
 
 void *client_receiver(void *socketfd){
-	char buffer[MAXBUFLEN];
+	
 	int numbytes;
-	struct message* newPacket = (struct message*) malloc(sizeof(struct message));
+	
 	int *sockfd = socketfd;
 
 	while(1){
+		struct message* newPacket = (struct message*) malloc(sizeof(struct message));
 		//receive a message from the server
-		memset(buffer, 0, MAXBUFLEN); // first empty the buffer
-		printf("hold A\n");
+		char buffer[MAXBUFLEN];
 		if ((numbytes = recv(*sockfd, buffer, MAXBUFLEN-1 , 0)) == -1) {
 			perror("recv");
 			return NULL;
 		}
-		printf("hold B\n");
 		//format
 		PacketToData(buffer, newPacket);
-
 		//check info
 		switch (newPacket->type)
 		{
@@ -620,12 +618,13 @@ void *client_receiver(void *socketfd){
 			fprintf(stdout, "talker: List of users and sessions:\n %s\n", newPacket->data);
 			break;
 		case MESSAGE:
-			fprintf(stdout, "%s: %s\n", newPacket->source, newPacket->data);
+			printf("%s: %s\n", newPacket->source, newPacket->data);
 			break;
 		default: //cannot receive LO_ACK or LO_NAK as this takes places before reaching this point
 			fprintf(stderr, "talker: erronous response from server, packet is of type %d and data is %s\n", newPacket->type, newPacket->data);
 			break;
 		}
+		free(newPacket);
 	}
 	return NULL;
 }

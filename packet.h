@@ -41,6 +41,12 @@ void DataToPacket(char* buffer, struct message * Packet){
     printf("This is the output of buffer: %s\n", buffer);
 }
 
+void DataToPacketSafe(char* buffer, struct message * Packet){
+	int header = sprintf(buffer, "%d:%d:%s:", Packet->type, Packet->size, Packet->source);
+    memcpy( buffer + header, Packet->data, Packet->size);
+    printf("This is the output of buffer: %s\n", buffer);
+}
+
 void DataToPacketNotPointer(char* buffer, struct message Packet){
 	memset(buffer, 0, MAXPACKLEN); // first empty the buffer
     int buffer_size = sizeof(buffer);
@@ -87,6 +93,7 @@ void PacketToData(char* buffer, struct message * Packet){
 	//printf("%d %d %d %s \n", Packet->total_frag, Packet->frag_no, Packet->size, Packet->filename);
 	i++;
 	memcpy(Packet->data, buffer+i, Packet->size);
+    * (Packet->data + Packet->size) = 0;
 
 }
 
