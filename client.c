@@ -304,7 +304,7 @@ void joinsession(char *arg1, int *sockfd){
 	struct message newPacket;
 	//populate packet
 	newPacket.type = JOIN;
-	newPacket.size = sizeof(*arg1);
+	newPacket.size = strlen(arg1);
 	strcpy(newPacket.source, clientID);
 	strcpy(newPacket.data, arg1);
 
@@ -449,7 +449,7 @@ void messageTransfer(char *message, int *sockfd){
 	struct message newPacket;
 	//populate packet
 	newPacket.type = MESSAGE;
-	newPacket.size = sizeof(*message);
+	newPacket.size = strlen(message);
 	strcpy(newPacket.source, clientID);
 	strcpy(newPacket.data, message);
 

@@ -20,7 +20,7 @@ struct Clients{
     int clientSocket;
     char* sessionName;
     char* clientUsername;
-    int clientID;
+    int clientIndex;
     bool joinedSession;
     int sessionIndex;
     bool loggedIn;
@@ -45,21 +45,24 @@ struct Session sessionList[SESSION_CAPACITY];
 
 
 pthread_mutex_t clientsMutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t sessionsMutex = PTHREAD_MUTEX_INITIALIZER;
 
 void * handleConnection(void * newClientArg){
 
-    struct Clients newClient = *(struct Clients *) newClientArg;
-    int clientID = newClient.clientID;
-    newClient.joinedSession = false;
-    newClient.loggedIn = false;
+    struct Clients * newClient = (struct Clients *) malloc (sizeof(struct Clients));
+    newClient->clientIndex = * (int *) newClientArg;
+    int clientIndex = newClient->clientIndex;
+    newClient->joinedSession = false;
+    newClient->loggedIn = false;
 
     struct message* clientMessage = (struct message*) malloc(sizeof(struct message));
     struct message* sendMessage = (struct message*) malloc(sizeof(struct message));
 
-    int clientSocket = newClient.clientSocket;
+    pthread_mutex_lock(&clientsMutex);
+    newClient->clientSocket = clientList[clientIndex].clientSocket;
+    pthread_mutex_unlock(&clientsMutex);
+    int clientSocket = newClient->clientSocket;
     int numbytes = 0;
-    char buf[MAXBUFLEN];
+    
 
     
     
@@ -69,18 +72,21 @@ void * handleConnection(void * newClientArg){
     bool notLoggedIn = true;
     
     //receive a message from the client
-    memset(buf, 0, MAXBUFLEN); 
-    if ((numbytes = recv(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
-        perror("Error in receiving from client");
-        exit(1);
-    }
-    if(numbytes == 0)
-        goto EXIT_EARLY;
+    {
+        char buf[MAXBUFLEN];
+        memset(buf, 0, MAXBUFLEN); 
+        if ((numbytes = recv(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+            perror("Error in receiving from client");
+            exit(1);
+        }
+        if(numbytes == 0)
+            goto EXIT_EARLY;
 
-    // message format of buffer received-  <type>:<size of data>:<source>:<data>
-    // printf("%s\n", buf);
-    
-    PacketToData(buf, clientMessage);
+        // message format of buffer received-  <type>:<size of data>:<source>:<data>
+        // printf("%s\n", buf);
+        
+        PacketToData(buf, clientMessage);
+    }
 
     // Check if first command sent by client is invalid
     if(clientMessage->type != LOGIN && clientMessage->type != EXIT){
@@ -93,16 +99,21 @@ void * handleConnection(void * newClientArg){
     if(clientMessage->type == EXIT){
         EXIT_EARLY:
         pthread_mutex_lock(&clientsMutex);
-        clientList[clientID].clientID = INACTIVE_CLIENT;
+        clientList[clientIndex].clientIndex = INACTIVE_CLIENT;
         pthread_mutex_unlock(&clientsMutex);
         free(clientMessage);
         free(sendMessage);
+        free(newClient);
+        close(clientSocket);
         return NULL;
     }
 
     if(clientMessage->type == LOGIN){
-        unsigned char * username = clientMessage->source;
-        unsigned char * password = clientMessage->data;
+        unsigned char * username = (unsigned char *) malloc(strlen(clientMessage->source));
+        strcpy(username, clientMessage->source);
+        unsigned char * password = (unsigned char *) malloc(clientMessage->size);
+        strncpy(password, clientMessage->data, clientMessage->size);
+        *(password + clientMessage->size) = 0;
 
         // Get usernames and passwords to check with packet
         FILE *fp;
@@ -128,8 +139,9 @@ void * handleConnection(void * newClientArg){
             // Check for match
             if(usernameLegal && passwordLegal){
                 notLoggedIn = false;
-                newClient.clientUsername = username;
-                newClient.loggedIn = true;
+                newClient->clientUsername = (char *) malloc(strlen(username));
+                strcpy(newClient->clientUsername, username);
+                newClient->loggedIn = true;
                 break;
             }
         }
@@ -139,47 +151,61 @@ void * handleConnection(void * newClientArg){
     INVALID_LOGIN:
     if(notLoggedIn){
         printf("I m not logged in, sending packet\n");
+
+        pthread_mutex_lock(&clientsMutex);
+        clientList[clientIndex].clientIndex = INACTIVE_CLIENT;
+        pthread_mutex_unlock(&clientsMutex);
+
         sendMessage->type = LO_NAK;
-        sendMessage->size = sizeof(reasonForFailure);
+        sendMessage->size = strlen(reasonForFailure);
         strcpy(sendMessage->source, "server");
         strcpy(sendMessage->data, reasonForFailure);
 
-        DataToPacket(buf, sendMessage);
-        
-        if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
-            perror("Error in sending to client\n");
-            exit(1);
+        {
+            char buf[MAXBUFLEN];
+            DataToPacket(buf, sendMessage);
+            
+            if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                perror("Error in sending to client\n");
+                exit(1);
+            }
         }
+
+        free(clientMessage);
+        free(sendMessage);
+        free(newClient);
+        close(clientSocket);
         return NULL;
     }
 
+    pthread_mutex_lock(&clientsMutex);
+    clientList[clientIndex] = *newClient;
+    pthread_mutex_unlock(&clientsMutex);
+    
     sendMessage->type = LO_ACK;
     sendMessage->size = sizeof("no-data");
     strcpy(sendMessage->source, "server");
     strcpy(sendMessage->data, "no-data");
-    
-    DataToPacket(buf, sendMessage);
-    if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
-        perror("Error in sending to client\n");
-        exit(1);
+
+    {
+        char buf[MAXBUFLEN];
+        DataToPacket(buf, sendMessage);
+        if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+            perror("Error in sending to client\n");
+            exit(1);
+        }
     }
     
     printf("Login successful ack sent!\n");
 
-    bool loggedIn = true;
+    // bool loggedIn = true;
     // --- Check command other than login now ---
 
-    while(loggedIn){
-        // receive a message from the client
-        memset(buf, 0, MAXBUFLEN); 
-        if ((numbytes = recv(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
-            perror("Error in receiving from client");
-            exit(1);
-        }
-        if(numbytes == 0)
-            goto EXIT_AFTER_LOGIN;
+    while(1){
 
         // empty the messages
+        free(clientMessage);
+        free(sendMessage);
         clientMessage = (struct message*) malloc(sizeof(struct message));
         sendMessage = (struct message*) malloc(sizeof(struct message));
 
@@ -187,19 +213,33 @@ void * handleConnection(void * newClientArg){
         bool joiningSessionHelp = false;
         bool createSessionHelp = false;
 
-        PacketToData(buf, clientMessage);
+        // receive a message from the client
+        {
+            char buf[MAXBUFLEN];
+            if ((numbytes = recv(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                perror("Error in receiving from client");
+                exit(1);
+            }
+            if(numbytes == 0)
+                goto EXIT_AFTER_LOGIN;
+
+            PacketToData(buf, clientMessage);
+        }
 
         if(clientMessage->type == LOGIN){
             sendMessage->type = LO_NAK;
             sendMessage->size = sizeof("You are already logged in. Logout first");
             strcpy(sendMessage->source, "server");
             strcpy(sendMessage->data, "You are already logged in. Logout first");
-
-            DataToPacket(buf, sendMessage);
             
-            if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
-                perror("Error in sending to client\n");
-                exit(1);
+            {
+                char buf[MAXBUFLEN];
+                DataToPacket(buf, sendMessage);
+                
+                if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                    perror("Error in sending to client\n");
+                    exit(1);
+                }
             }
         }
 
@@ -207,13 +247,11 @@ void * handleConnection(void * newClientArg){
         // make itself inactive in list of clients
         // logout before exiting? 
         if(clientMessage->type == EXIT){
-            printf("client logged out\n");
             EXIT_AFTER_LOGIN:
-            printf("Please dont leave!!!");
-            pthread_mutex_lock(&sessionsMutex);
+            printf("Please dont leave %s!!!\n", newClient->clientUsername);
             pthread_mutex_lock(&clientsMutex);
-            if(newClient.joinedSession){
-                int sessionIndex = newClient.sessionIndex;
+            if(newClient->joinedSession){
+                int sessionIndex = newClient->sessionIndex;
                 sessionList[sessionIndex].numClients-= 1; 
 
                 // if no clients, inactivate the session
@@ -221,45 +259,51 @@ void * handleConnection(void * newClientArg){
                     sessionList[sessionIndex].sessionIndex = INACTIVE_SESSION;
                 }
             }
-            clientList[clientID].clientID = INACTIVE_CLIENT;
-            pthread_mutex_unlock(&sessionsMutex);
+            clientList[clientIndex].clientIndex = INACTIVE_CLIENT;
             pthread_mutex_unlock(&clientsMutex);
+
+            // free malloced data
             free(clientMessage);
             free(sendMessage);
+            free(newClient->clientUsername);
+            free(newClient);
+            close(clientSocket);
             return NULL;
         }
 
         if(clientMessage->type == NEW_SESS){
-            if(newClient.joinedSession){
+            if(newClient->joinedSession){
                 createSessionHelp = true; // helps to return back after leaving session
                 goto LEAVESESSION;
             }
 
             BACKTOCREATESESSION: 
             createSessionHelp = false;
-            pthread_mutex_lock(&sessionsMutex);
+            pthread_mutex_lock(&clientsMutex);
 
             // create session and add name to list
             struct Session newSession;
             newSession.sessionIndex = totalSessions;
-            newSession.sessionName = (char *) malloc(strlen(clientMessage->source));
-            strcpy(newSession.sessionName, clientMessage->source);
-            newSession.numClients = 0; // join session will increment count
-            // maybe not set numClients correctly?
+            newSession.sessionName = (char *) malloc(clientMessage->size);
+            strncpy(newSession.sessionName, clientMessage->data, clientMessage->size);
+            *(newSession.sessionName + clientMessage->size) = 0;
+            newSession.numClients = 1; 
             sessionList[totalSessions] = newSession;
             
 
             // join the session
-            newClient.sessionIndex = totalSessions;
-            newClient.sessionName = (char *) malloc(strlen(clientMessage->source));
-            strcpy(newClient.sessionName,clientMessage->source);
-            newClient.joinedSession = true;
+            newClient->sessionIndex = totalSessions;
+            newClient->sessionName = (char *) malloc(clientMessage->size);
+            strncpy(newClient->sessionName,clientMessage->data, clientMessage->size);
+            *(newClient->sessionName + clientMessage->size) = 0;
+            newClient->joinedSession = true;
 
             // increment count for sessions array
             totalSessions++;
 
-            pthread_mutex_unlock(&sessionsMutex);
-
+            // update the client list with client information
+            clientList[clientIndex] = *newClient;
+            pthread_mutex_unlock(&clientsMutex);
 
             // send ack for new session
             sendMessage->type = NS_ACK;
@@ -267,86 +311,106 @@ void * handleConnection(void * newClientArg){
             strcpy(sendMessage->source, "server");
             strcpy(sendMessage->data,"New session created succefully!");
 
-            DataToPacket(buf, sendMessage);
-            if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
-                perror("Error in sending to client\n");
-                exit(1);
+            {
+                char buf[MAXBUFLEN];
+                DataToPacket(buf, sendMessage);
+                if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                    perror("Error in sending to client\n");
+                    exit(1);
+                }
             }
         }
 
         if(clientMessage->type == JOIN){
             JOINSESSION:
 
-            if(newClient.joinedSession){
+            if(newClient->joinedSession){
                 joiningSessionHelp = true;
                 goto LEAVESESSION;
             }
 
             BACKTOJOINSESSION:
             joiningSessionHelp = false;
-            pthread_mutex_lock(&sessionsMutex);
+            pthread_mutex_lock(&clientsMutex);
 
             for(int i =0; i<totalSessions; i++){
                 if(sessionList[i].sessionIndex != INACTIVE_SESSION){
-                    if(strcmp(sessionList[i].sessionName,clientMessage->source) == 0){
-                        newClient.sessionIndex = i;
-                        newClient.sessionName = (char *) malloc(strlen(clientMessage->source));
-                        strcpy(newClient.sessionName, clientMessage->source);
-                        newClient.joinedSession = true;
+                    if(strcmp(sessionList[i].sessionName,clientMessage->data) == 0){
+                        newClient->sessionIndex = i;
+                        newClient->sessionName = (char *) malloc(clientMessage->size);
+                        strncpy(newClient->sessionName, clientMessage->data, clientMessage->size);
+                        *(newClient->sessionName + clientMessage->size) = 0;
+                        newClient->joinedSession = true;
                         sessionList[i].numClients+= 1;
+                        break;
                     }
                 }
             }
-            pthread_mutex_unlock(&sessionsMutex);
 
-            if(newClient.joinedSession){
+            // update the client list with client information
+            clientList[clientIndex] = *newClient;
+            pthread_mutex_unlock(&clientsMutex);
+
+            if(newClient->joinedSession){
                 // send ack for join session
                 sendMessage->type = JN_ACK;
                 sendMessage->size = sizeof("Joined session succefully!");
                 strcpy(sendMessage->source, "server");
                 strcpy(sendMessage->data,"Joined session succefully!");
 
-                DataToPacket(buf, sendMessage);
-                if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
-                    perror("Error in sending to client\n");
-                    exit(1);
+                {
+                    char buf[MAXBUFLEN];
+                    DataToPacket(buf, sendMessage);
+                    if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                        perror("Error in sending to client\n");
+                        exit(1);
+                    }
                 }
             }
-            else if(!newClient.joinedSession){
+            else if(!newClient->joinedSession){
                 // send nak for join session
                 sendMessage->type = JN_NAK;
                 sendMessage->size = sizeof("The session you entered is invalid");
                 strcpy(sendMessage->source, "server");
                 strcpy(sendMessage->data, "The session you entered is invalid");
 
-                DataToPacket(buf, sendMessage);
-                if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
-                    perror("Error in sending to client\n");
-                    exit(1);
+                {
+                    char buf[MAXBUFLEN];
+                    DataToPacket(buf, sendMessage);
+                    if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                        perror("Error in sending to client\n");
+                        exit(1);
+                    }
                 }
             }
         }
 
         if(clientMessage->type == LEAVE_SESS){
             LEAVESESSION:
+            pthread_mutex_lock(&clientsMutex);
 
-            pthread_mutex_lock(&sessionsMutex);
-            if(newClient.joinedSession){
-                newClient.joinedSession = false;
-                sessionList[newClient.sessionIndex].numClients-=1;
+            if(newClient->joinedSession){
+                newClient->joinedSession = false;
+                sessionList[newClient->sessionIndex].numClients-=1;
             }
+
             else{
                  // We do nothing
-                 printf("Trying to leave session but we cleint never joined one\n");
+                 printf("Trying to leave session but we client never joined one\n");
             }
 
-            int sessionIndex = newClient.sessionIndex;
+            int sessionIndex = newClient->sessionIndex;
+            printf("%s has left session %s\n", newClient->clientUsername, sessionList[sessionIndex].sessionName);
+
             // if no clients, inactivate the session
             if(sessionList[sessionIndex].numClients == 0){
+                printf("Everyone has left session %s : Deactivating", sessionList[sessionIndex].sessionName);
                 sessionList[sessionIndex].sessionIndex = INACTIVE_SESSION;
             }
-            pthread_mutex_unlock(&sessionsMutex);
 
+            // update the client list with client information
+            clientList[clientIndex] = *newClient;
+            pthread_mutex_unlock(&clientsMutex);
             
             if(createSessionHelp == true){
                 goto BACKTOCREATESESSION;
@@ -357,68 +421,72 @@ void * handleConnection(void * newClientArg){
         }
 
         if(clientMessage->type == MESSAGE){
-
-            if(newClient.joinedSession == true){
-                pthread_mutex_lock(&clientsMutex);
-                pthread_mutex_lock(&sessionsMutex);
+            
+            pthread_mutex_lock(&clientsMutex);
+            if(newClient->joinedSession == true){
                 int i;
                 for(i = 0; i<totalClients; i++){
                     
                     // check the client list item if it is a part of same session
-                    if(clientList[i].clientID!= INACTIVE_CLIENT){
-                        if(clientList[i].sessionIndex == newClient.sessionIndex){
+                    if(clientList[i].clientIndex!= INACTIVE_CLIENT){
+                        if(clientList[i].sessionIndex == newClient->sessionIndex){
                             
                             // empty client message
+                            free(sendMessage);
                             sendMessage = (struct message*) malloc(sizeof(struct message));
 
                             // send message to all clients connected
                             sendMessage->type = MESSAGE;
                             sendMessage->size = clientMessage->size;
-                            strcpy(sendMessage->source, newClient.clientUsername);
-                            strcpy(sendMessage->data, clientMessage->data);
-
-                            DataToPacket(buf, sendMessage);
-                            if ((numbytes = send(clientList[i].clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
-                                perror("Error in sending to client\n");
-                                exit(1);
+                            strcpy(sendMessage->source, newClient->clientUsername);
+                            strncpy(sendMessage->data, clientMessage->data, clientMessage->size);
+                            *(sendMessage->data + clientMessage->size) = 0;
+                            {
+                                char buf[MAXBUFLEN];
+                                DataToPacket(buf, sendMessage);
+                                if ((numbytes = send(clientList[i].clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                                    perror("Error in sending to client\n");
+                                    exit(1);
+                                }
                             }
 
                             // potential bug: case of unexpected closed connection here, numbytes = 0
                         }
                     }
                 }
-                pthread_mutex_unlock(&clientsMutex);
-                pthread_mutex_unlock(&sessionsMutex);
             }
+            pthread_mutex_unlock(&clientsMutex);
         }
 
         if(clientMessage->type == QUERY){
-            pthread_mutex_lock(&sessionsMutex);
             pthread_mutex_lock(&clientsMutex);
 
-            char result[] = "";
+            char * result = (char*) malloc(1000);
             int i;
+            int cursor = 0;
             for(i = 0; i<totalClients; i++){
                 // add every active user and its session name to the list
-                if(clientList[i].clientID!= INACTIVE_CLIENT){                      
-                    sprintf(result, "%s: %s\n", clientList[i].clientUsername, clientList[i].sessionName);
+                if(clientList[i].clientIndex!= INACTIVE_CLIENT && clientList[i].joinedSession){                      
+                    cursor+= sprintf(result+cursor, "%s: %s\n", clientList[i].clientUsername, clientList[i].sessionName);
                 }
             }
-
+            printf("%s\n",result);
+            int resultLen = strlen(result);
             sendMessage->type = QU_ACK;
-            sendMessage->size = strlen(result);
-            strcpy(sendMessage->source, newClient.clientUsername);
-            strcpy(sendMessage->data, result);
+            sendMessage->size = resultLen;
+            strcpy(sendMessage->source, newClient->clientUsername);
+            strncpy(sendMessage->data, result, resultLen);
+            free(result);
 
-            DataToPacket(buf, sendMessage);
-
-            if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
-                perror("Error in sending to client\n");
-                exit(1);
+            {
+                char buf[MAXBUFLEN];
+                DataToPacket(buf, sendMessage);
+                if ((numbytes = send(clientList[clientIndex].clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                    perror("Error in sending to client\n");
+                    exit(1);
+                }
             }
             
-
-            pthread_mutex_unlock(&sessionsMutex);
             pthread_mutex_unlock(&clientsMutex);
         }
     }
@@ -505,12 +573,13 @@ int main(int argc, char const *argv[])
         // printf("newClientSocket: %d\n", newClientSocket);
         inet_ntop(newClientAddr.ss_family, get_in_addr((struct sockaddr *)&newClientAddr), addrstlen, sizeof(addrstlen));
 
+        pthread_mutex_lock(&clientsMutex);
         // Add a client to the list of clients with socketfd and address
         clientList[totalClients].clientSocket = newClientSocket;
-        clientList[totalClients].clientID = totalClients;
-        
+        clientList[totalClients].clientIndex = totalClients;
+        pthread_mutex_unlock(&clientsMutex);
         // Create a thread that uses the socket and handles connection
-        pthread_create(&newClientThread, NULL, handleConnection, &clientList[totalClients]);
+        pthread_create(&newClientThread, NULL, handleConnection, (void*) &clientList[totalClients].clientIndex);
         totalClients++;
     }
 }
