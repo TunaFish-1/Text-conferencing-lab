@@ -61,10 +61,7 @@ int main(int argc, char *argv[])
 		if (command[0] == '\0') {
 			perror("too few arguments or too long\n");
 			goto ask_input;
-		} else if (extra[0] != '\0') {
-			perror("too many arguments\n");
-			goto ask_input;
-		}
+		} 
 
 		//check command
 		if (strcmp(command, "/login")==0){
@@ -596,6 +593,9 @@ void *client_receiver(void *socketfd){
 		if ((numbytes = recv(*sockfd, buffer, MAXBUFLEN-1 , 0)) == -1) {
 			perror("recv");
 			return NULL;
+		}
+		if(numbytes == 0){
+			break;
 		}
 		//format
 		PacketToData(buffer, newPacket);

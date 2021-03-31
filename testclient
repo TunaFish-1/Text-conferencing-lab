@@ -4,7 +4,7 @@
 # The server should be running on a different terminal before running this script
 # The client executable should be in the same folder as the script
 # Usage:
-# >>> ./testclient user1 password1 user2 password2 server_addr server_port
+# >>> ./testclient romil8jain 123 tuna-fish1 456 127.0.0.1 5000
 #
 # Starts 2 clients and send a sequence of commands to each of them
 # The commands sent to client i are printed under a line "==== client i in ===="
