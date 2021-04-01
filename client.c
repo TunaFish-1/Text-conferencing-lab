@@ -61,11 +61,7 @@ int main(int argc, char *argv[])
 		if (command[0] == '\0') {
 			perror("too few arguments or too long\n");
 			goto ask_input;
-		}
-		// } else if (extra[0] != '\0') {
-		// 	perror("too many arguments\n");
-		// 	goto ask_input;
-		// }
+		} 
 
 		//check command
 		if (strcmp(command, "/login")==0){
@@ -82,9 +78,7 @@ int main(int argc, char *argv[])
 				perror("too many arguments\n");
 				goto ask_input;
 			}
-			printf("entering logout\n");
 			logout(&sockfd, &clientThread);
-			printf("return from logout\n");
 		}else if (strcmp(command, "/joinsession")==0){ 
 			if (arg1[0] == '\0') {
 				perror("too few arguments or too long\n");
@@ -598,6 +592,9 @@ void *client_receiver(void *socketfd){
 			perror("recv");
 			return NULL;
 		}
+		if(numbytes == 0){
+			break;
+		}
 		//format
 		PacketToData(buffer, newPacket);
 		//check info
@@ -616,10 +613,10 @@ void *client_receiver(void *socketfd){
 			fprintf(stdout, "talker: server acknowledge new session %s\n", newPacket->data);
 			break;
 		case QU_ACK:
-			fprintf(stdout, "talker: List of users and sessions:\n %s\n", newPacket->data);
+			fprintf(stdout, "talker: List of users and sessions:\n %s", newPacket->data);
 			break;
 		case MESSAGE:
-			printf("%s: %s\n", newPacket->source, newPacket->data);
+			printf("%s: %s", newPacket->source, newPacket->data);
 			break;
 		default: //cannot receive LO_ACK or LO_NAK as this takes places before reaching this point
 			fprintf(stderr, "talker: erronous response from server, packet is of type %d and data is %s\n", newPacket->type, newPacket->data);

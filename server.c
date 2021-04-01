@@ -489,8 +489,13 @@ void * handleConnection(void * newClientArg){
             int cursor = 0;
             for(i = 0; i<totalClients; i++){
                 // add every active user and its session name to the list
-                if(clientList[i].clientIndex!= INACTIVE_CLIENT && clientList[i].joinedSession){                      
-                    cursor+= sprintf(result+cursor, "%s: %s\n", clientList[i].clientUsername, clientList[i].sessionName);
+                if(clientList[i].clientIndex!= INACTIVE_CLIENT){                      
+                    cursor+= sprintf(result+cursor, "%s: ", clientList[i].clientUsername);
+                    if(clientList[i].joinedSession){
+                        cursor+= sprintf(result+cursor, "%s\n", clientList[i].sessionName);
+                    }else{
+                        cursor+= sprintf(result+cursor, "not in a session\n");
+                    }
                 }
             }
             printf("%s\n",result);
