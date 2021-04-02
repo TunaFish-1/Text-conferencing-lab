@@ -31,7 +31,8 @@ enum type {
     NS_ACK,
     MESSAGE,
     QUERY,
-    QU_ACK
+    QU_ACK,
+    TIME
 };
 
 void DataToPacket(char* buffer, struct message * Packet){

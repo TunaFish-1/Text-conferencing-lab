@@ -618,6 +618,16 @@ void *client_receiver(void *socketfd){
 		case MESSAGE:
 			printf("%s: %s", newPacket->source, newPacket->data);
 			break;
+		case TIME:
+			printf("%s: %s", newPacket->source, newPacket->data);
+			close(*sockfd);
+			*sockfd = 0;
+			sessionID = NULL;
+			numbytes = pthread_cancel(pthread_self());
+			if(numbytes!=0){
+				fprintf(stderr, "talker: failed to delete thread during log out\n");
+			}
+			break;
 		default: //cannot receive LO_ACK or LO_NAK as this takes places before reaching this point
 			fprintf(stderr, "talker: erronous response from server, packet is of type %d and data is %s\n", newPacket->type, newPacket->data);
 			break;

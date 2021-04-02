@@ -230,12 +230,24 @@ void * handleConnection(void * newClientArg){
         bool joiningSessionHelp = false;
         bool createSessionHelp = false;
 
+        // //timeout
+        struct timeval timeout;
+        timeout.tv_sec = 10;
+        timeout.tv_usec = 0;
+        int timeover = 0;
+        if (setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0) {
+            perror("setsockopt failed\n");
+            exit(1);
+        }
+
         // receive a message from the client
         {
             char buf[MAXBUFLEN];
-            if ((numbytes = recv(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
-                perror("Error in receiving from client");
-                exit(1);
+            numbytes = recv(clientSocket, buf, MAXBUFLEN-1 , 0);
+            if (numbytes == -1){
+                timeover = 1;
+                goto EXIT_AFTER_LOGIN;
+
             }
             if(numbytes == 0)
                 goto EXIT_AFTER_LOGIN;
@@ -265,7 +277,25 @@ void * handleConnection(void * newClientArg){
         // logout before exiting? 
         if(clientMessaging->type == EXIT){
             EXIT_AFTER_LOGIN:
-            printf("Please dont leave %s!!!\n", newClient->clientUsername);
+            if(timeover){
+                sendMessaging->type = TIME;
+                sendMessaging->size = sizeof("You are being logged out, TIMEOUT\n");
+                strcpy(sendMessaging->source, "server");
+                strcpy(sendMessaging->data, "You are being logged out, TIMEOUT\n");
+                
+                {
+                    char buf[MAXBUFLEN];
+                    DataToPacketSafe(buf, sendMessaging);
+                    
+                    if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                        perror("Error in sending to client\n");
+                        exit(1);
+                    }
+                }
+                printf("Kicking %s!!!\n", newClient->clientUsername);
+            }else{
+                printf("Please dont leave %s!!!\n", newClient->clientUsername);
+            }
             pthread_mutex_lock(&clientsMutex);
             if(newClient->joinedSession){
                 int sessionIndex = newClient->sessionIndex;
@@ -273,6 +303,7 @@ void * handleConnection(void * newClientArg){
 
                 // if no clients, inactivate the session
                 if(sessionList[sessionIndex].numClients == 0){
+                    printf("Everyone has left session %s : Deactivating\n", sessionList[sessionIndex].sessionName);
                     sessionList[sessionIndex].sessionIndex = INACTIVE_SESSION;
                 }
             }
