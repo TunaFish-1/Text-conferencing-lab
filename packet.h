@@ -32,7 +32,13 @@ enum type {
     MESSAGE,
     QUERY,
     QU_ACK,
-    TIME
+    TIME,
+    KICK,
+    K_ACK,
+    K_NACK,
+    ADMIN,
+    AD_ACK,
+    AD_NACK
 };
 
 void DataToPacket(char* buffer, struct message * Packet){

@@ -30,10 +30,13 @@ void createsession(char *arg1, int *sockfd);
 void list(int *sockfd);
 void quit(int *sockfd, pthread_t *clientThread);
 void messageTransfer(char *message, int *sockfd);
+void kickout(char *arg1, int *sockfd);
+void promote(char *arg1, int *sockfd);
 
 //global variables
 char *sessionID = NULL;
 char clientID[MAX_NAME];
+int admin = 0;
 
 int main(int argc, char *argv[])
 {
@@ -95,11 +98,26 @@ int main(int argc, char *argv[])
 			}
 			leavesession(&sockfd);
 		}else if (strcmp(command, "/createsession")==0){
-			if (arg2[0] != '\0') {
+			if (arg1[0] == '\0') {
+				perror("too few arguments or too long\n");
+				goto ask_input;
+			} else if (arg2[0] != '\0') {
 				perror("too many arguments\n");
 				goto ask_input;
 			}
 			createsession(arg1, &sockfd);
+		}else if (strcmp(command, "/promote")==0){
+			if (arg2[0] != '\0') {
+				perror("too many arguments\n");
+				goto ask_input;
+			}
+			promote(arg1, &sockfd);
+		}else if (strcmp(command, "/kickout")==0){
+			if (arg2[0] != '\0') {
+				perror("too many arguments\n");
+				goto ask_input;
+			}
+			kickout(arg1, &sockfd);
 		}else if (strcmp(command, "/list")==0){
 			if (arg1[0] != '\0') {
 				perror("too many arguments\n");
@@ -112,8 +130,8 @@ int main(int argc, char *argv[])
 				goto ask_input;
 			}
 			quit(&sockfd, &clientThread);
-			fprintf(stdout, "EXIT\n");
-			return 0;
+			// fprintf(stdout, "EXIT\n");
+			// return 0;
 		}else{ //command is the message to be sent
 			messageTransfer(buf, &sockfd);
 		}
@@ -327,6 +345,9 @@ void leavesession(int *sockfd){
 	if (sessionID == NULL){
 		fprintf(stdout, "Client is not in a session\n");
 		return;
+	} 
+	if(admin == 1){
+		admin = 0;
 	}
 
 	//create packet
@@ -463,6 +484,87 @@ void messageTransfer(char *message, int *sockfd){
 	//free(newPacket);
 	return;
 
+}
+
+void kickout(char *arg1, int *sockfd){
+	if (*sockfd == 0){
+		fprintf(stdout, "Client not logged in\n");
+		return;
+	}else if (sessionID == NULL){
+		fprintf(stdout, "Client not in a session\n");
+		return;
+	}else if (admin == 0){
+		fprintf(stdout, "Client is not admin\n");
+		return;
+	}else if (strcmp(arg1, clientID) == 0){
+		fprintf(stdout, "Can't kick yourself, just leavesession\n");
+		return;
+	}
+
+	//create packet
+	struct message newPacket;
+	//populate packet
+	newPacket.type = KICK;
+	newPacket.size = strlen(arg1);
+	strcpy(newPacket.source, clientID);
+	strcpy(newPacket.data, arg1);
+
+	//format packet
+	char buffer[MAXBUFLEN];
+	int numbytes;
+	DataToPacketNotPointer(buffer, newPacket);
+
+	//send packet
+	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
+		perror("talker: send");
+		//free(newPacket);
+		return;
+	}
+
+	//free(newPacket);
+	return;
+}
+
+void promote(char *arg1, int *sockfd){
+	if (*sockfd == 0){
+		fprintf(stdout, "Client not logged in\n");
+		return;
+	}else if (sessionID == NULL){
+		fprintf(stdout, "Client not in a session\n");
+		return;
+	}else if (admin == 0){
+		fprintf(stdout, "Client is not admin\n");
+		return;
+	}else if (strcmp(arg1, clientID) == 0){
+		fprintf(stdout, "You are already the admin\n");
+		return;
+	}
+
+	//no more admin
+	admin = 0;
+
+	//create packet
+	struct message newPacket;
+	//populate packet
+	newPacket.type = ADMIN;
+	newPacket.size = strlen(arg1);
+	strcpy(newPacket.source, clientID);
+	strcpy(newPacket.data, arg1);
+
+	//format packet
+	char buffer[MAXBUFLEN];
+	int numbytes;
+	DataToPacketNotPointer(buffer, newPacket);
+
+	//send packet
+	if ((numbytes = send(*sockfd, buffer, MAXBUFLEN-1, 0)) == -1) {
+		perror("talker: send");
+		//free(newPacket);
+		return;
+	}
+
+	//free(newPacket);
+	return;
 }
 
 void askInput(char *buf, char *command, char *arg1, char *arg2, char *arg3, char *arg4, char *extra){
@@ -609,6 +711,7 @@ void *client_receiver(void *socketfd){
 			fprintf(stderr, "talker: can't join session %s\n", newPacket->data);
 			break;
 		case NS_ACK:
+			admin = 1;
 			sessionID = newPacket->data;
 			fprintf(stdout, "talker: server acknowledge new session %s\n", newPacket->data);
 			break;
@@ -617,6 +720,21 @@ void *client_receiver(void *socketfd){
 			break;
 		case MESSAGE:
 			printf("%s: %s", newPacket->source, newPacket->data);
+			break;
+		case AD_ACK:
+			printf("%s: %s\n", newPacket->source, newPacket->data);
+			admin = 1;
+			break;
+		case AD_NACK:
+			printf("%s: %s\n", newPacket->source, newPacket->data);
+			admin = 1;
+			break;
+		case K_ACK:
+			printf("%s: %s\n", newPacket->source, newPacket->data);
+			sessionID = NULL;
+			break;
+		case K_NACK:
+			printf("%s: %s\n", newPacket->source, newPacket->data);
 			break;
 		case TIME:
 			printf("%s: %s", newPacket->source, newPacket->data);

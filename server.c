@@ -30,6 +30,7 @@ struct Session{
     int sessionIndex;
     char* sessionName;
     int numClients;
+    char* admin;
 };
 
 
@@ -39,6 +40,8 @@ struct Session{
 #define INACTIVE_CLIENT -1
 #define INACTIVE_SESSION -1
 #define MAXCHAR 1000
+
+char *noMoreAdmin = "NO_MORE_ADMIN";
 
 struct Clients clientList[SERVER_CAPACITY];
 struct Session sessionList[SESSION_CAPACITY];
@@ -232,7 +235,7 @@ void * handleConnection(void * newClientArg){
 
         // //timeout
         struct timeval timeout;
-        timeout.tv_sec = 10;
+        timeout.tv_sec = 120;
         timeout.tv_usec = 0;
         int timeover = 0;
         if (setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout)) < 0) {
@@ -301,6 +304,10 @@ void * handleConnection(void * newClientArg){
                 int sessionIndex = newClient->sessionIndex;
                 sessionList[sessionIndex].numClients-= 1; 
 
+                //if admin and not transfered, transfer to someone still in session
+                sessionList[sessionIndex].admin = noMoreAdmin;
+                printf("ADMIN left without having a successor, no more admins, all are equal\n");
+
                 // if no clients, inactivate the session
                 if(sessionList[sessionIndex].numClients == 0){
                     printf("Everyone has left session %s : Deactivating\n", sessionList[sessionIndex].sessionName);
@@ -336,6 +343,7 @@ void * handleConnection(void * newClientArg){
             strncpy(newSession.sessionName, clientMessaging->data, clientMessaging->size);
             *(newSession.sessionName + clientMessaging->size) = 0;
             newSession.numClients = 1; 
+            newSession.admin = newClient->clientUsername;
             sessionList[totalSessions] = newSession;
             
 
@@ -372,10 +380,10 @@ void * handleConnection(void * newClientArg){
         if(clientMessaging->type == JOIN){
             JOINSESSION:
 
-            if(newClient->joinedSession){
-                joiningSessionHelp = true;
-                goto LEAVESESSION;
-            }
+            // if(newClient->joinedSession){
+            //     joiningSessionHelp = true;
+            //     goto LEAVESESSION;
+            // }
 
             BACKTOJOINSESSION:
             joiningSessionHelp = false;
@@ -454,6 +462,10 @@ void * handleConnection(void * newClientArg){
             int sessionIndex = newClient->sessionIndex;
             printf("%s has left session %s\n", newClient->clientUsername, sessionList[sessionIndex].sessionName);
 
+            //if admin and not transfered, transfer to someone still in session
+            sessionList[sessionIndex].admin = noMoreAdmin;
+            printf("ADMIN left without having a successor, no more admins, all are equal\n");
+
             // if no clients, inactivate the session
             if(sessionList[sessionIndex].numClients == 0){
                 printf("Everyone has left session %s : Deactivating\n", sessionList[sessionIndex].sessionName);
@@ -462,6 +474,7 @@ void * handleConnection(void * newClientArg){
 
             // update the client list with client information
             clientList[clientIndex] = *newClient;
+
             pthread_mutex_unlock(&clientsMutex);
             
             if(createSessionHelp == true){
@@ -508,6 +521,133 @@ void * handleConnection(void * newClientArg){
             pthread_mutex_unlock(&clientsMutex);
         }
 
+        if(clientMessaging->type == KICK){
+            
+            pthread_mutex_lock(&clientsMutex);
+            if(newClient->joinedSession == true){
+                int i;
+                for(i = 0; i<totalClients; i++){
+                    
+                    // check the client list item if it is a part of same session
+                    if(clientList[i].clientIndex!= INACTIVE_CLIENT){
+                        if(clientList[i].joinedSession && clientList[i].sessionIndex == newClient->sessionIndex){
+                            if(strcmp(clientList[i].clientUsername, clientMessaging->data) == 0){
+                                if(clientList[i].joinedSession){
+                                    clientList[i].joinedSession = false;
+                                    sessionList[clientList[i].sessionIndex].numClients-=1;
+                                }
+
+                                int sessionIndex = clientList[i].sessionIndex;
+                                //int sessionIndex = newClient->sessionIndex;
+                                printf("%s has been kicked from session %s\n", clientList[i].clientUsername, sessionList[sessionIndex].sessionName);
+
+                                // update the client list with client information
+                                //clientList[clientIndex] = clientList[i];
+
+                                struct message* sendText = (struct message*) malloc(sizeof(struct message));
+
+                                // send message to all clients connected
+                                sendText->type = K_ACK;
+                                sendText->size = strlen("Has kicked you from the session");
+                                strcpy(sendText->source, newClient->clientUsername);
+                                strcpy(sendText->data, "Has kicked you from the session");
+                                {
+                                    char buf[MAXBUFLEN];
+                                    DataToPacketSafe(buf, sendText);
+                                    if ((numbytes = send(clientList[i].clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                                        perror("Error in sending to client\n");
+                                        exit(1);
+                                    }
+                                }
+                                break;
+                            }
+
+                            // potential bug: case of unexpected closed connection here, numbytes = 0
+                        }
+                    }
+                }
+                if(i == totalClients){
+                    //NOT FOUND
+                    // send nak for join session
+                    sendMessaging->type = K_NACK;
+                    sendMessaging->size = sizeof("The client you entered is invalid");
+                    strcpy(sendMessaging->source, "server");
+                    strcpy(sendMessaging->data, "The client you entered is invalid");
+
+                    {
+                        char buf[MAXBUFLEN];
+                        DataToPacketSafe(buf, sendMessaging);
+                        if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                            perror("Error in sending to client\n");
+                            exit(1);
+                        }
+                    }
+                }
+            }
+            pthread_mutex_unlock(&clientsMutex);
+        }
+
+        if(clientMessaging->type == ADMIN){
+            
+            pthread_mutex_lock(&clientsMutex);
+            if(newClient->joinedSession == true){
+                int i;
+                for(i = 0; i<totalClients; i++){
+                    
+                    // check the client list item if it is a part of same session
+                    if(clientList[i].clientIndex!= INACTIVE_CLIENT){
+                        if(clientList[i].joinedSession && clientList[i].sessionIndex == newClient->sessionIndex){
+                            if(strcmp(clientList[i].clientUsername, clientMessaging->data) == 0){
+                                int sessionIndex = newClient->sessionIndex;
+                                if(clientList[i].joinedSession){
+                                    sessionList[sessionIndex].admin = clientList[i].clientUsername;
+                                }
+
+                                printf("%s has been made admin of session %s\n", clientList[i].clientUsername, sessionList[sessionIndex].sessionName);
+
+                                struct message* sendText = (struct message*) malloc(sizeof(struct message));
+
+                                // send message to all clients connected
+                                sendText->type = AD_ACK;
+                                sendText->size = strlen("Has made you admin of the session");
+                                strcpy(sendText->source, newClient->clientUsername);
+                                strcpy(sendText->data, "Has made you admin of the session");
+                                {
+                                    char buf[MAXBUFLEN];
+                                    DataToPacketSafe(buf, sendText);
+                                    if ((numbytes = send(clientList[i].clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                                        perror("Error in sending to client\n");
+                                        exit(1);
+                                    }
+                                }
+                                break;
+                            }
+
+                            // potential bug: case of unexpected closed connection here, numbytes = 0
+                        }
+                    }
+                }
+                if(i == totalClients){
+                    //NOT FOUND
+                    // send nak for join session
+                    sendMessaging->type = AD_NACK;
+                    sendMessaging->size = sizeof("The client you entered is invalid");
+                    strcpy(sendMessaging->source, "server");
+                    strcpy(sendMessaging->data, "The client you entered is invalid");
+
+                    {
+                        char buf[MAXBUFLEN];
+                        DataToPacketSafe(buf, sendMessaging);
+                        if ((numbytes = send(clientSocket, buf, MAXBUFLEN-1 , 0)) == -1) {
+                            perror("Error in sending to client\n");
+                            exit(1);
+                        }
+                    }
+                }
+            }
+            pthread_mutex_unlock(&clientsMutex);
+        }
+
         if(clientMessaging->type == QUERY){
             pthread_mutex_lock(&clientsMutex);
 
@@ -523,6 +663,9 @@ void * handleConnection(void * newClientArg){
                 if(clientList[i].clientIndex!= INACTIVE_CLIENT){                      
                     cursor+= sprintf(result+cursor, "%s: ", clientList[i].clientUsername);
                     if(clientList[i].joinedSession){
+                        if(strcmp(sessionList[clientList[i].sessionIndex].admin, clientList[i].clientUsername)==0){
+                            cursor+= sprintf(result+cursor, "ADMIN of "); 
+                        }
                         cursor+= sprintf(result+cursor, "%s\n", clientList[i].sessionName);
                     }else{
                         cursor+= sprintf(result+cursor, "not in a session\n");
