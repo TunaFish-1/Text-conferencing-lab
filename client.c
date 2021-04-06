@@ -298,6 +298,9 @@ int logout(int *sockfd, pthread_t *clientThread){
 	fprintf(stdout, "talker: client successfully logged out\n");
 	close(*sockfd);
 	*sockfd = 0;
+	if(admin == 1){
+		admin = 0;
+	}
 	sessionID = NULL;
 	//free(newPacket);
 	return 1;
@@ -741,6 +744,9 @@ void *client_receiver(void *socketfd){
 			close(*sockfd);
 			*sockfd = 0;
 			sessionID = NULL;
+			if(admin == 1){
+				admin = 0;
+			}
 			numbytes = pthread_cancel(pthread_self());
 			if(numbytes!=0){
 				fprintf(stderr, "talker: failed to delete thread during log out\n");

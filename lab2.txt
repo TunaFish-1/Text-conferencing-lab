@@ -1,0 +1,11 @@
+1) [As proposed in handout]
+    Timeout implementation set by setsockopt on the server side and logs out corresponding user,
+    update client-side by killing according threads
+2) [Accepted on piazza]
+    - client that creates a session becomes the admin of that session
+    - admin can kick anyone in that session (/kickout <clientID> ) or make someone else the admin instead (/promote <clientID> )
+    - a kicked user can still rejoin
+    - if admin is timed-out due to (1), leaves a session or logout
+     without transfering admin status to someone else in the session,
+     the admin would have taken the passive decision to delete admin status in that session (all users are equal)
+     the ex-admin can rejoin that session but will be equal to all in the session without an admin status 
